@@ -1,0 +1,49 @@
+# 1. Security & Environment variables (NEVER COMMIT)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+credentials.json
+
+# 2. Node.js & Frontend dependencies
+node_modules/
+dist/
+build/
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# 3. Python & AI dependencies
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+ENV/
+*.onnx
+*.pth
+*.pt
+*.engine
+*.bin
+*.weights
+models/saved/
+ai-service/weights/
+
+# 4. Logs & Temp files
+*.log
+logs/
+temp/
+tmp/
+*.tmp
+
+# 5. IDE & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
