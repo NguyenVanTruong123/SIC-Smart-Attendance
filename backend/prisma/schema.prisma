@@ -1,0 +1,354 @@
+// ============================================================================
+// SPAS - Smart Passive Attendance System
+// Database Schema Specification (Prisma ORM for PostgreSQL / Supabase)
+// Synchronized 100% with init_database.sql (v6.0 Final)
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ----------------------------------------------------------------------------
+// ENUMS
+// ----------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  LOCKED
+}
+
+enum CameraStatus {
+  ONLINE
+  OFFLINE
+  MAINTENANCE
+}
+
+enum CourseClassStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum SessionStatus {
+  SCHEDULED
+  LIVE_NOW
+  COMPLETED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  TRUANT
+  EXCUSED
+}
+
+enum LeaveRequestType {
+  FULL_SESSION
+  LATE_ENTRY
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AuditActionType {
+  MANUAL_OVERRIDE
+  EKYC_APPROVED
+  INTRUDER_ALERT
+  CAMERA_CONFIG_CHANGE
+}
+
+// ----------------------------------------------------------------------------
+// 1. USERS TABLE
+// ----------------------------------------------------------------------------
+model User {
+  id             String     @id @default(uuid()) @db.Uuid
+  userCode       String     @unique @map("user_code") @db.VarChar(50)
+  email          String     @unique @db.VarChar(255)
+  passwordHash   String     @map("password_hash") @db.VarChar(255)
+  fullName       String     @map("full_name") @db.VarChar(150)
+  role           UserRole
+  department     String?    @db.VarChar(150)
+  className      String?    @map("class_name") @db.VarChar(50)
+  phone          String?    @db.VarChar(20)
+  avatarUrl      String?    @map("avatar_url") @db.VarChar(500)
+  isFaceEnrolled Boolean    @default(false) @map("is_face_enrolled")
+  status         UserStatus @default(ACTIVE)
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  taughtClasses         CourseClass[]            @relation("TeacherClasses")
+  enrollments           CourseEnrollment[]
+  attendanceLogs        AttendanceLog[]          @relation("StudentAttendance")
+  overriddenAttendances AttendanceLog[]          @relation("TeacherOverrides")
+  proofSnapshots        SessionProofSnapshot[]
+  leaveRequests         LeaveRequest[]           @relation("StudentLeaveRequests")
+  reviewedLeaves        LeaveRequest[]           @relation("ReviewerLeaveRequests")
+  biometricProfile      UserBiometric?
+  biometricRequests     BiometricUpdateRequest[] @relation("UserBiometricRequests")
+  reviewedBioRequests   BiometricUpdateRequest[] @relation("AdminReviewedBioRequests")
+  auditActions          SystemAuditLog[]         @relation("ActorAuditLogs")
+
+  @@map("users")
+}
+
+// ----------------------------------------------------------------------------
+// 2. CLASSROOMS TABLE
+// ----------------------------------------------------------------------------
+model Classroom {
+  id           String       @id @default(uuid()) @db.Uuid
+  roomCode     String       @unique @map("room_code") @db.VarChar(50)
+  building     String       @db.VarChar(50)
+  floor        Int
+  capacity     Int
+  cameraIp     String       @map("camera_ip") @db.VarChar(50)
+  rtspUrl      String       @map("rtsp_url") @db.VarChar(500)
+  cameraStatus CameraStatus @default(ONLINE) @map("camera_status")
+  fps          Int          @default(30)
+  latencyMs    Int          @default(0) @map("latency_ms")
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  sessions ClassSession[]
+
+  @@map("classrooms")
+}
+
+// ----------------------------------------------------------------------------
+// 3. COURSES TABLE
+// ----------------------------------------------------------------------------
+model Course {
+  id            String   @id @default(uuid()) @db.Uuid
+  courseCode    String   @unique @map("course_code") @db.VarChar(50)
+  courseName    String   @map("course_name") @db.VarChar(200)
+  credits       Int
+  totalSessions Int      @default(15) @map("total_sessions")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  courseClasses CourseClass[]
+
+  @@map("courses")
+}
+
+// ----------------------------------------------------------------------------
+// 4. COURSE_CLASSES TABLE
+// ----------------------------------------------------------------------------
+model CourseClass {
+  id           String            @id @default(uuid()) @db.Uuid
+  courseId     String            @map("course_id") @db.Uuid
+  teacherId    String            @map("teacher_id") @db.Uuid
+  classCode    String            @unique @map("class_code") @db.VarChar(100)
+  semester     String            @db.VarChar(20)
+  academicYear String            @map("academic_year") @db.VarChar(30)
+  status       CourseClassStatus @default(ACTIVE)
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  course      Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  teacher     User               @relation("TeacherClasses", fields: [teacherId], references: [id], onDelete: Restrict)
+  enrollments CourseEnrollment[]
+  sessions    ClassSession[]
+
+  @@map("course_classes")
+}
+
+// ----------------------------------------------------------------------------
+// 5. COURSE_ENROLLMENTS TABLE
+// ----------------------------------------------------------------------------
+model CourseEnrollment {
+  id               String   @id @default(uuid()) @db.Uuid
+  courseClassId    String   @map("course_class_id") @db.Uuid
+  studentId        String   @map("student_id") @db.Uuid
+  totalAbsences    Int      @default(0) @map("total_absences")
+  absenceRate      Decimal  @default(0.00) @map("absence_rate") @db.Decimal(5, 2)
+  isBannedFromExam Boolean  @default(false) @map("is_banned_from_exam")
+  enrolledAt       DateTime @default(now()) @map("enrolled_at") @db.Timestamptz()
+
+  // Relations
+  courseClass CourseClass @relation(fields: [courseClassId], references: [id], onDelete: Cascade)
+  student     User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([courseClassId, studentId], name: "uq_course_student")
+  @@map("course_enrollments")
+}
+
+// ----------------------------------------------------------------------------
+// 6. CLASS_SESSIONS TABLE
+// ----------------------------------------------------------------------------
+model ClassSession {
+  id            String        @id @default(uuid()) @db.Uuid
+  courseClassId String        @map("course_class_id") @db.Uuid
+  classroomId   String        @map("classroom_id") @db.Uuid
+  sessionNumber Int           @map("session_number")
+  sessionDate   DateTime      @map("session_date") @db.Date
+  startTime     DateTime      @map("start_time") @db.Time()
+  endTime       DateTime      @map("end_time") @db.Time()
+  topic         String?       @db.VarChar(255)
+  status        SessionStatus @default(SCHEDULED)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  courseClass    CourseClass            @relation(fields: [courseClassId], references: [id], onDelete: Cascade)
+  classroom      Classroom              @relation(fields: [classroomId], references: [id], onDelete: Restrict)
+  attendanceLogs AttendanceLog[]
+  proofSnapshots SessionProofSnapshot[]
+  leaveRequests  LeaveRequest[]
+
+  @@map("class_sessions")
+}
+
+// ----------------------------------------------------------------------------
+// 7. ATTENDANCE_LOGS TABLE
+// ----------------------------------------------------------------------------
+model AttendanceLog {
+  id               String           @id @default(uuid()) @db.Uuid
+  sessionId        String           @map("session_id") @db.Uuid
+  studentId        String           @map("student_id") @db.Uuid
+  status           AttendanceStatus @default(ABSENT)
+  lateMinutes      Int              @default(0) @map("late_minutes")
+  checkpoints      Json?            @default("{\"15m\": false, \"30m\": false, \"45m\": false, \"60m\": false}")
+  isGuestStudent   Boolean          @default(false) @map("is_guest_student")
+  manualOverrideBy String?          @map("manual_override_by") @db.Uuid
+  overrideReason   String?          @map("override_reason")
+  overrideAt       DateTime?        @map("override_at") @db.Timestamptz()
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  session  ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student  User         @relation("StudentAttendance", fields: [studentId], references: [id], onDelete: Cascade)
+  override User?        @relation("TeacherOverrides", fields: [manualOverrideBy], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, studentId], name: "uq_session_student")
+  @@map("attendance_logs")
+}
+
+// ----------------------------------------------------------------------------
+// 8. SESSION_PROOF_SNAPSHOTS TABLE (4 Ảnh Snapshot 15p)
+// ----------------------------------------------------------------------------
+model SessionProofSnapshot {
+  id               String   @id @default(uuid()) @db.Uuid
+  sessionId        String   @map("session_id") @db.Uuid
+  studentId        String   @map("student_id") @db.Uuid
+  milestoneMinutes Int      @map("milestone_minutes") // 15, 30, 45, 60
+  snapshotTime     DateTime @default(now()) @map("snapshot_time") @db.Timestamptz()
+  imageUrl         String   @map("image_url") @db.VarChar(500)
+  aiMatchScore     Decimal? @map("ai_match_score") @db.Decimal(5, 2)
+  boundingBox      Json?    @map("bounding_box")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  session ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student User         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("session_proof_snapshots")
+}
+
+// ----------------------------------------------------------------------------
+// 9. LEAVE_REQUESTS TABLE
+// ----------------------------------------------------------------------------
+model LeaveRequest {
+  id            String           @id @default(uuid()) @db.Uuid
+  studentId     String           @map("student_id") @db.Uuid
+  sessionId     String           @map("session_id") @db.Uuid
+  requestType   LeaveRequestType @default(FULL_SESSION) @map("request_type")
+  reason        String
+  attachmentUrl String?          @map("attachment_url") @db.VarChar(500)
+  status        RequestStatus    @default(PENDING)
+  reviewerId    String?          @map("reviewer_id") @db.Uuid
+  reviewNote    String?          @map("review_note")
+  reviewedAt    DateTime?        @map("reviewed_at") @db.Timestamptz()
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  student  User         @relation("StudentLeaveRequests", fields: [studentId], references: [id], onDelete: Cascade)
+  session  ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  reviewer User?        @relation("ReviewerLeaveRequests", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@map("leave_requests")
+}
+
+// ----------------------------------------------------------------------------
+// 10. USER_BIOMETRICS TABLE (Kho Vector & FAISS Map)
+// ----------------------------------------------------------------------------
+model UserBiometric {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @unique @map("user_id") @db.Uuid
+  faissVectorId   BigInt?   @unique @map("faiss_vector_id")
+  enrolledFaceUrl String?   @map("enrolled_face_url") @db.VarChar(500)
+  lastEnrolledAt  DateTime? @map("last_enrolled_at") @db.Timestamptz()
+  matchConfidence Decimal?  @map("match_confidence") @db.Decimal(5, 2)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_biometrics")
+}
+
+// ----------------------------------------------------------------------------
+// 11. BIOMETRIC_UPDATE_REQUESTS TABLE (Xin Cấp Lại Mặt 3 Bước)
+// ----------------------------------------------------------------------------
+model BiometricUpdateRequest {
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  requestCode     String        @unique @map("request_code") @db.VarChar(50)
+  identityCardUrl String        @map("identity_card_url") @db.VarChar(500)
+  newFaceVideoUrl String        @map("new_face_video_url") @db.VarChar(500)
+  newFaceImageUrl String?       @map("new_face_image_url") @db.VarChar(500)
+  reason          String
+  status          RequestStatus @default(PENDING)
+  reviewerId      String?       @map("reviewer_id") @db.Uuid
+  reviewNote      String?       @map("review_note")
+  reviewedAt      DateTime?     @map("reviewed_at") @db.Timestamptz()
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  user     User  @relation("UserBiometricRequests", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer User? @relation("AdminReviewedBioRequests", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@map("biometric_update_requests")
+}
+
+// ----------------------------------------------------------------------------
+// 12. SYSTEM_AUDIT_LOGS TABLE (Nhật Ký Vết Kèm Ảnh CCTV)
+// ----------------------------------------------------------------------------
+model SystemAuditLog {
+  id              String          @id @default(uuid()) @db.Uuid
+  actorId         String          @map("actor_id") @db.Uuid
+  actionType      AuditActionType @map("action_type")
+  targetTable     String?         @map("target_table") @db.VarChar(50)
+  targetId        String?         @map("target_id") @db.Uuid
+  beforeState     Json?           @map("before_state")
+  afterState      Json?           @map("after_state")
+  description     String?
+  cctvSnapshotUrl String?         @map("cctv_snapshot_url") @db.VarChar(500)
+  ipAddress       String?         @map("ip_address") @db.VarChar(50)
+  userAgent       String?         @map("user_agent") @db.VarChar(255)
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  actor User @relation("ActorAuditLogs", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@map("system_audit_logs")
+}
