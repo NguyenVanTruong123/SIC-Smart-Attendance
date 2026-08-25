@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import authRoutes from './routes/auth.routes';
 
 dotenv.config();
 
@@ -30,7 +31,10 @@ app.get('/api/v1/health', (req: Request, res: Response) => {
   });
 });
 
-// 3. Bắt lỗi khi người dùng gọi sai đường dẫn (404 Not Found)
+// 3. Khai báo các module API chính của hệ thống
+app.use('/api/v1/auth', authRoutes); // <-- 2. Mở cổng API /api/v1/auth
+
+// 4. Bắt lỗi khi người dùng gọi sai đường dẫn (404 Not Found)
 app.use((req: Request, res: Response) => {
   res.status(404).json({
     success: false,
@@ -43,7 +47,7 @@ app.use((req: Request, res: Response) => {
   });
 });
 
-// 4. Xử lý lỗi tập trung toàn hệ thống (Global Error Handler)
+// 5. Xử lý lỗi tập trung toàn hệ thống (Global Error Handler)
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error('Unhandled Error:', err);
   res.status(500).json({
