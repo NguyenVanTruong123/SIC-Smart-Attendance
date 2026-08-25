@@ -4,8 +4,56 @@ import { Request, Response, NextFunction } from 'express';
 //    res: công cụ để gửi dữ liệu JSON về lại cho người dùng.
 //    next: dùng để chuyển tiếp nếu có middleware.
 import { authService } from '../services/auth.service';
+import { AuthenticatedRequest } from '../middlewares/auth.middlewares';
+import prisma from '../config/prisma';
+
 
 export class AuthController {
+
+
+  async getMe(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.userId;
+      // Tìm thông tin chi tiết người dùng trong Database
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          userCode: true,
+          fullName: true,
+          email: true,
+          role: true,
+          department: true,
+          className: true,
+          avatarUrl: true,
+          isFaceEnrolled: true,
+          status: true,
+          createdAt: true,
+        },
+      });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          statusCode: 404,
+          error: {
+            code: 'USER_NOT_FOUND',
+            message: 'Không tìm thấy thông tin người dùng.',
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
+      return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: 'Lấy thông tin tài khoản thành công.',
+        data: user,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  }
+
   /**
    * [POST] /api/v1/auth/login
    * Xử lý yêu cầu đăng nhập từ phía người dùng / Frontend
