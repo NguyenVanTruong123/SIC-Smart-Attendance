@@ -4,6 +4,7 @@ import { verifyToken, authorizeRoles } from '../middlewares/auth.middlewares';
 import { uploadExcel } from '../middlewares/upload.middleware';
 import { importController } from '../controllers/import.controller';
 import { biometricController } from '../controllers/biometric.controller'; 
+import { classroomController } from '../controllers/classroom.controller';
 
 const router = Router();
 
@@ -23,5 +24,9 @@ router.post(
   ]),
   (req, res, next) => importController.importBundle(req, res, next)
 );
+
+// 3. MODULE PHÒNG HỌC & CAMERA IP
+router.get('/classrooms', (req, res, next) => classroomController.getClassrooms(req, res, next));
+
 
 export default router;
