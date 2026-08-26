@@ -15,7 +15,7 @@ function portalUser(user: { id: string; userCode?: string; fullName: string; rol
 }
 
 type Section = {
-  id: number;
+  id: string;
   course_code: string;
   title: string;
   room: string;
@@ -225,8 +225,8 @@ function ProofModal({ imageBase64, onClose }: { imageBase64: string; onClose: ()
 // Login Page
 // -----------------------------------------------------------------------------
 function Login({ onLogin }: { onLogin: (user: User) => Promise<void> }) {
-  const [userId, setUserId] = useState("SV001");
-  const [password, setPassword] = useState("sv123");
+  const [userId, setUserId] = useState("21020001");
+  const [password, setPassword] = useState("Student@123");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -304,13 +304,13 @@ function Login({ onLogin }: { onLogin: (user: User) => Promise<void> }) {
         <div className="login-demo-pills">
           <p className="sub-text">Chọn nhanh tài khoản thử nghiệm:</p>
           <div className="demo-btn-group">
-            <button type="button" className="secondary small-button" onClick={() => quickSelect("SV001", "sv123")}>
+            <button type="button" className="secondary small-button" onClick={() => quickSelect("21020001", "Student@123")}>
               Sinh viên
             </button>
-            <button type="button" className="secondary small-button" onClick={() => quickSelect("GV001", "gv123")}>
+            <button type="button" className="secondary small-button" onClick={() => quickSelect("GV001", "Teacher@123")}>
               Giảng viên
             </button>
-            <button type="button" className="secondary small-button" onClick={() => quickSelect("ADMIN001", "admin123")}>
+            <button type="button" className="secondary small-button" onClick={() => quickSelect("ADMIN001", "Admin@123")}>
               Quản trị viên
             </button>
           </div>
@@ -827,7 +827,7 @@ function StudentLeaveRequests({ sections }: { sections: Section[] }) {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const targetSection = sections.find((s) => s.id === Number(sectionId));
+    const targetSection = sections.find((s) => s.id === sectionId);
     const newReq: LeaveRequest = {
       id: `LR-00${requests.length + 1}`,
       studentId: "SV001",
@@ -1184,7 +1184,7 @@ function TeacherScan({ sections, initialSection }: { sections: Section[]; initia
             <select
               value={selected?.id ?? ""}
               onChange={(e) => {
-                const sec = sections.find((s) => s.id === Number(e.target.value));
+                const sec = sections.find((s) => s.id === e.target.value);
                 setSelected(sec);
               }}
             >
@@ -1519,7 +1519,7 @@ const INITIAL_MATRIX_STUDENTS: StudentMatrixRow[] = [
 ];
 
 function TeacherReports({ sections }: { sections: Section[] }) {
-  const [selectedSectionId, setSelectedSectionId] = useState<number>(sections[0]?.id || 1);
+  const [selectedSectionId, setSelectedSectionId] = useState<string>(sections[0]?.id || "");
   const [semester, setSemester] = useState("HK1 (2026-2027)");
   const [sessionFilter, setSessionFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -1529,7 +1529,7 @@ function TeacherReports({ sections }: { sections: Section[] }) {
   const [editModal, setEditModal] = useState<{ student: StudentMatrixRow; sessionIndex: number; newStatus: "present" | "late" | "absent" | "excused"; note: string } | null>(null);
 
   const selectedSection = sections.find((s) => s.id === selectedSectionId) || sections[0] || {
-    id: 1,
+    id: "local-preview",
     course_code: "INT101",
     title: "Nhập môn Trí tuệ nhân tạo",
     room: "A2-301",
@@ -1666,7 +1666,7 @@ function TeacherReports({ sections }: { sections: Section[] }) {
           <select
             id="rep-section"
             value={selectedSectionId}
-            onChange={(e) => setSelectedSectionId(Number(e.target.value))}
+            onChange={(e) => setSelectedSectionId(e.target.value)}
           >
             {sections.map((s) => (
               <option key={s.id} value={s.id}>

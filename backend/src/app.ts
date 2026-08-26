@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes';
 import adminRoutes from './routes/admin.routes'; 
 import aiRoutes from './routes/ai.routes';
+import portalRoutes from './routes/portal.routes';
 
 dotenv.config();
 
@@ -37,6 +38,7 @@ app.get('/api/v1/health', (req: Request, res: Response) => {
 app.use('/api/v1/auth', authRoutes); // <-- 2. Mở cổng API /api/v1/auth
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/ai', aiRoutes);
+app.use('/api/v1', portalRoutes);
 
 // 4. Bắt lỗi khi người dùng gọi sai đường dẫn (404 Not Found)
 app.use((req: Request, res: Response) => {
