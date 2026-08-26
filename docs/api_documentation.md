@@ -236,35 +236,75 @@ Hệ thống sử dụng **JWT (JSON Web Token)** với cơ chế **Role-Based A
 
 ### 3.2. Trung tâm Sinh trắc học & Kho Vector (`/admin/biometrics`)
 
-#### 📍 3.2.1. Lấy danh sách hồ sơ sinh trắc học & 3 Thẻ KPI
-* **Endpoint:** `GET /api/v1/admin/biometrics` | **Auth:** `ADMIN`
-* **Query Params:** `role` (`STUDENT`, `TEACHER`), `status` (`ENROLLED`, `PENDING`, `NOT_ENROLLED`), `page`, `limit`, `search`.
+#### 📍 3.2.1. Lấy danh sách hồ sơ sinh trắc học & 4 Thẻ KPI (Màn hình 1.2)
+* **Endpoint:** `GET /api/v1/admin/biometrics` | **Auth:** `ADMIN` (Gửi kèm `Authorization: Bearer <token>`)
+* **Query Params:**
+  * `role`: Lọc theo Tab đối tượng (`STUDENT` - mặc định, `TEACHER`, `ADMIN`).
+  * `search`: Tìm kiếm theo MSSV, Họ tên hoặc Mã Vector ID.
+  * `department`: Lọc theo Khoa (`ALL`, `Khoa Công Nghệ Thông Tin`, `Khoa Kinh Tế`...).
+  * `status`: Lọc theo trạng thái eKYC (`ALL`, `ENROLLED` - Đã nạp Vector, `NOT_ENROLLED` - Chưa xác thực, `PENDING_RESET` - Có đơn xin đổi diện mạo).
+  * `page`: Trang hiện tại (Mặc định: 1).
+  * `limit`: Số bản ghi trên 1 trang (Mặc định: 10).
 * **Success Response (200 OK):**
 ```json
 {
   "success": true,
   "statusCode": 200,
+  "message": "Lấy danh sách sinh trắc học và KPI thành công.",
   "data": {
     "kpis": {
-      "totalVectors": 1250,
-      "pendingRequests": 5,
-      "notEnrolledCount": 42
+      "totalStudents": 4250,
+      "enrolledCount": 4180,
+      "enrolledRate": "98.3%",
+      "notEnrolledCount": 70,
+      "pendingResetRequests": 5
+    },
+    "tabCounts": {
+      "students": 4250,
+      "teachers": 185
     },
     "items": [
       {
-        "id": "usr_stu_2102001",
-        "userCode": "2102001",
+        "id": "17f96b03-51a2-499f-8998-cafd8653fdc4",
+        "userCode": "21110001",
         "fullName": "Nguyễn Văn An",
         "role": "STUDENT",
         "className": "21CNTT1",
+        "department": "Khoa Công Nghệ Thông Tin",
+        "email": "21110001@vnu.edu.vn",
+        "phone": "0912345678",
+        "avatarUrl": "https://cdn.spas.edu.vn/faces/master/21110001.jpg",
         "isFaceEnrolled": true,
-        "vectorId": 512,
-        "masterImageUrl": "https://cdn.spas.edu.vn/faces/master/2102001.jpg",
-        "matchScore": 96.4,
-        "updatedAt": "2026-09-10T14:35:10Z"
+        "vectorId": "#V-512001",
+        "enrolledDate": "2023-10-10",
+        "hasPendingResetRequest": false,
+        "pendingRequestId": null
+      },
+      {
+        "id": "85036671-afe4-4156-877a-55627a65f8d5",
+        "userCode": "21110045",
+        "fullName": "Trần Thị Bích Ngọc",
+        "role": "STUDENT",
+        "className": "21KT3",
+        "department": "Khoa Kinh Tế",
+        "email": "21110045@vnu.edu.vn",
+        "phone": "0912345681",
+        "avatarUrl": "https://cdn.spas.edu.vn/faces/master/21110045.jpg",
+        "isFaceEnrolled": true,
+        "vectorId": "#V-512045",
+        "enrolledDate": "2022-09-15",
+        "hasPendingResetRequest": true,
+        "pendingRequestId": "req_bio_2026_001"
       }
-    ]
-  }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "totalItems": 4250,
+      "totalPages": 425
+    }
+  },
+  "timestamp": "2026-08-26T09:41:03.856Z"
 }
 ```
 

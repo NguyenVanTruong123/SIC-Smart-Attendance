@@ -3,13 +3,17 @@ import { UserRole } from '@prisma/client';
 import { verifyToken, authorizeRoles } from '../middlewares/auth.middlewares';
 import { uploadExcel } from '../middlewares/upload.middleware';
 import { importController } from '../controllers/import.controller';
+import { biometricController } from '../controllers/biometric.controller'; 
 
 const router = Router();
 
 // Tất cả các route bên dưới bắt buộc phải có Token JWT và có quyền ADMIN
 router.use(verifyToken, authorizeRoles(UserRole.ADMIN));
 
-// Endpoint Import File Excel 3-trong-1 (Modal 1.2.1)
+// 1. Endpoint Lấy danh sách Sinh trắc học & 4 Thẻ KPI (Màn hình 1.2)
+router.get('/biometrics', (req, res, next) => biometricController.getBiometrics(req, res, next));
+
+// 2. Endpoint Import File Excel 3-trong-1 (Modal 1.2.1)
 router.post(
   '/import/excel-bundle',
   uploadExcel.fields([
