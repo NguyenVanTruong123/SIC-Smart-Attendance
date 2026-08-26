@@ -126,6 +126,54 @@ export class ClassroomController {
       next(error);
     }
   }
+
+  /**
+   * [POST] /api/v1/admin/classrooms/ping-camera
+   * [POST] /api/v1/admin/classrooms/:id/ping-camera
+   * Kiểm tra kết nối Camera IP / iVCam (Modal 1.1.2 & 1.1.1)
+   */
+  async pingCamera(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const { rtspUrl, roomId } = req.body;
+      const id = req.params?.id || roomId;
+
+      const result = await classroomService.pingCamera({
+        rtspUrl,
+        roomId: id,
+      });
+
+      return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: 'Kết nối Camera RTSP thành công!',
+        data: result,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  }
+
+  /**
+   * [GET] /api/v1/admin/classrooms/:id
+   * Lấy chi tiết phòng học và danh sách ca học hôm nay (Modal 1.1.1)
+   */
+  async getClassroomDetail(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const result = await classroomService.getClassroomDetail(id);
+
+      return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: 'Lấy chi tiết phòng học và lịch học thành công.',
+        data: result,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  }
 }
 
 export const classroomController = new ClassroomController();
