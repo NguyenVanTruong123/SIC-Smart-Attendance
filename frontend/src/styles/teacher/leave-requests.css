@@ -1,0 +1,13 @@
+/* ==============================================================================
+   Teacher Tab: Leave Requests Approval (Phê duyệt đơn xin nghỉ)
+   ============================================================================== */
+
+.teacher-leave-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.teacher-leave-table td small {
+  display: block;
+  margin-top: 2px;
+}

@@ -1,0 +1,13 @@
+/* ==============================================================================
+   Admin Tab: Classroom & RTSP Camera IP (Phòng học & Camera IP)
+   ============================================================================== */
+
+.admin-rtsp-code {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 11px;
+  background-color: var(--sidebar);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  word-break: break-all;
+}

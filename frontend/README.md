@@ -1,18 +1,17 @@
-# 🎨 Frontend Web Application
+# SPAS Frontend
 
-Giao diện Web dành cho Giảng viên, Sinh viên và Quản trị viên (Admin).
+React/Vite portal imported from the UI-only fork. It is deliberately independent
+of the source fork's workspace packages so it can be installed from this repo.
 
-## 🛠️ Công nghệ sử dụng
-- **Framework:** React + Vite
-- **UI Library / Styling:** Ant Design / TailwindCSS / Lucide Icons
-- **State Management:** Zustand / TanStack Query
-- **Realtime:** WebSocket / Socket.io-client / WebRTC (Live Stream RTSP)
+## Run
 
-## 🚀 Khởi chạy
 ```bash
-# 1. Cài đặt dependencies
 npm install
-
-# 2. Chạy môi trường development
 npm run dev
 ```
+
+## Backend integration
+
+The portal currently calls relative `/api/*` endpoints. Configure the Vite
+development proxy or serve the built files behind the backend after the team
+aligns endpoint paths and response schemas with the UI contract.

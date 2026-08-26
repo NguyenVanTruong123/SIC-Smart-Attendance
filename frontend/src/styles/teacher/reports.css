@@ -1,0 +1,351 @@
+/* ==============================================================================
+   Teacher Tab: Attendance Reports & Multi-Session Matrix (Báo cáo chuyên cần)
+   Academic Light Mode v5.1
+   ============================================================================== */
+
+/* Export Action Buttons */
+.reports-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-export-excel {
+  background-color: #10b981 !important;
+  border-color: #10b981 !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s ease;
+}
+
+.btn-export-excel:hover {
+  background-color: #059669 !important;
+  border-color: #059669 !important;
+}
+
+.btn-export-pdf {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-weight: 600;
+}
+
+/* 5-Point Filter Bar */
+.reports-filter-bar {
+  display: grid;
+  grid-template-columns: 1.5fr 1.1fr 1.3fr 1.3fr 1.5fr;
+  gap: 12px;
+  background-color: var(--surface);
+  padding: 16px 20px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-group label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.filter-group select,
+.filter-group input {
+  min-height: 36px;
+  font-size: 12.5px;
+  padding: 6px 10px;
+}
+
+.filter-search-box {
+  position: relative;
+}
+
+.filter-search-box input {
+  padding-left: 32px;
+}
+
+.filter-search-box .search-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 18px;
+  pointer-events: none;
+}
+
+/* KPI Summary Cards */
+.reports-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.reports-kpi-card {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 18px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  box-shadow: var(--shadow-sm);
+}
+
+.reports-kpi-card.warning-card {
+  border-left: 4px solid var(--status-absent);
+}
+
+.reports-kpi-card .kpi-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.reports-kpi-card .kpi-value {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+
+.reports-kpi-card .kpi-value.green {
+  color: var(--status-present);
+}
+
+.reports-kpi-card .kpi-value.red {
+  color: var(--status-absent);
+}
+
+.reports-kpi-card .kpi-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.reports-kpi-card .kpi-sub.up {
+  color: var(--status-present);
+  font-weight: 600;
+}
+
+.reports-kpi-card .kpi-sub.warning-text {
+  color: var(--status-absent);
+  font-weight: 600;
+}
+
+.reports-kpi-card .kpi-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reports-kpi-card .kpi-icon-wrap.green {
+  background-color: var(--status-present-bg);
+  color: var(--status-present);
+}
+
+.reports-kpi-card .kpi-icon-wrap.blue {
+  background-color: var(--primary-light);
+  color: var(--primary);
+}
+
+.reports-kpi-card .kpi-icon-wrap.red {
+  background-color: var(--status-absent-bg);
+  color: var(--status-absent);
+}
+
+/* Matrix Table & Legend */
+.matrix-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.matrix-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
+}
+
+.matrix-table th.session-col,
+.matrix-table td.session-col {
+  text-align: center;
+  padding: 8px 4px;
+  min-width: 52px;
+}
+
+.matrix-cell-status {
+  width: 26px;
+  height: 26px;
+  margin: 0 auto;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.matrix-cell-status:hover {
+  transform: scale(1.15);
+}
+
+.matrix-cell-status.present {
+  background-color: var(--status-present-bg);
+  color: var(--status-present);
+  border: 1px solid var(--status-present-border);
+}
+
+.matrix-cell-status.late {
+  background-color: var(--status-late-bg);
+  color: var(--status-late);
+  border: 1px solid var(--status-late-border);
+}
+
+.matrix-cell-status.absent {
+  background-color: var(--status-absent-bg);
+  color: var(--status-absent);
+  border: 1px solid var(--status-absent-border);
+}
+
+.matrix-cell-status.left_midway {
+  background-color: var(--status-left-midway-bg);
+  color: var(--status-left-midway);
+  border: 1px solid var(--status-left-midway-border);
+}
+
+.matrix-cell-status.excused {
+  background-color: var(--status-excused-bg);
+  color: var(--status-excused);
+  border: 1px solid var(--status-excused-border);
+}
+
+.matrix-cell-status.empty {
+  background-color: #f1f5f9;
+  color: #94a3b8;
+  border: 1px dashed #cbd5e1;
+}
+
+.student-info-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.student-avatar-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background-color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.badge-risk-danger {
+  background-color: var(--status-absent-bg);
+  color: var(--status-absent);
+  border: 1px solid var(--status-absent-border);
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.badge-risk-good {
+  background-color: var(--status-present-bg);
+  color: var(--status-present);
+  border: 1px solid var(--status-present-border);
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge-risk-warn {
+  background-color: var(--status-late-bg);
+  color: var(--status-late);
+  border: 1px solid var(--status-late-border);
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.reports-footer-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  background-color: #fafbfc;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.reports-footer-info .rules-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #fff;
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  font-size: 11.5px;
+}
+
+.reports-actions-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.icon-action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.icon-action-btn:hover {
+  background-color: var(--primary-light);
+  color: var(--primary);
+  border-color: var(--primary-border);
+}

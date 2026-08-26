@@ -1,0 +1,8 @@
+/* ==============================================================================
+   Admin Tab: Audit Logs (Nhật ký vết hệ thống)
+   ============================================================================== */
+
+.admin-audit-table td code {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 11px;
+}

@@ -1,0 +1,9 @@
+/* ==============================================================================
+   Admin Tab: Dashboard & Quick Stats (Thông số hệ thống)
+   ============================================================================== */
+
+.admin-stats-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}

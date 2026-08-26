@@ -1,0 +1,15 @@
+/* ==============================================================================
+   Admin Tab: Classes & Courses (Môn & Lớp học phần)
+   ============================================================================== */
+
+.admin-classes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 960px) {
+  .admin-classes-grid {
+    grid-template-columns: 1fr;
+  }
+}

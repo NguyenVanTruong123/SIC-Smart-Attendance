@@ -1,0 +1,15 @@
+/* ==============================================================================
+   Teacher Tab: Scan & Live Camera Attendance (Quét Camera điểm danh)
+   ============================================================================== */
+
+.teacher-scan-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.teacher-roster-table select {
+  min-height: 32px;
+  width: auto;
+  font-size: 12px;
+}

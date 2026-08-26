@@ -1,0 +1,11 @@
+/* ==============================================================================
+   Teacher Tab: Schedule Hub (Lịch giảng dạy & Thời khóa biểu)
+   ============================================================================== */
+
+.teacher-schedule-table td button {
+  white-space: nowrap;
+}
+
+.teacher-schedule-table small {
+  color: var(--text-muted);
+}

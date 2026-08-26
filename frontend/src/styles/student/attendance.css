@@ -1,0 +1,18 @@
+/* ==============================================================================
+   Student Tab: Attendance History (Lịch sử điểm danh)
+   ============================================================================== */
+
+.proof-thumbnail {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.proof-thumbnail:hover {
+  transform: scale(1.08);
+  box-shadow: var(--shadow-md);
+}

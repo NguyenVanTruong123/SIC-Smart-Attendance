@@ -1,0 +1,14 @@
+/* ==============================================================================
+   Student Tab: Leave Requests (Cổng đơn xin nghỉ & đi muộn)
+   ============================================================================== */
+
+.student-leave-form textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.student-leave-history table small {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+}

@@ -1,0 +1,30 @@
+/* ==============================================================================
+   SPAS Academic Design System v5.1 - Master Stylesheet
+   Modularized by Roles & Tabs
+   ============================================================================== */
+
+/* 1. Tokens & Foundation */
+@import "./styles/tokens.css";
+@import "./styles/base.css";
+@import "./styles/shell.css";
+@import "./styles/common.css";
+
+/* 2. Student Role & Tabs */
+@import "./styles/student/dashboard.css";
+@import "./styles/student/attendance.css";
+@import "./styles/student/leave.css";
+@import "./styles/student/enrollment.css";
+@import "./styles/student/biometric.css";
+
+/* 3. Teacher Role & Tabs */
+@import "./styles/teacher/schedule.css";
+@import "./styles/teacher/scan.css";
+@import "./styles/teacher/leave-requests.css";
+@import "./styles/teacher/reports.css";
+
+/* 4. Admin Role & Tabs */
+@import "./styles/admin/dashboard.css";
+@import "./styles/admin/biometrics.css";
+@import "./styles/admin/classrooms.css";
+@import "./styles/admin/classes.css";
+@import "./styles/admin/audit.css";

@@ -1,0 +1,39 @@
+/* ==============================================================================
+   Student Tab: Dashboard (Tổng quan cá nhân)
+   ============================================================================== */
+
+.rate-card {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+.donut-ring {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: conic-gradient(var(--status-present) 0% var(--rate, 100%), var(--border) var(--rate, 100%) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.donut-ring-inner {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}

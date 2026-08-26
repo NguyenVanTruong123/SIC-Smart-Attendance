@@ -1,0 +1,57 @@
+/* ==============================================================================
+   SPAS Academic Design Tokens v5.1
+   ============================================================================== */
+
+:root {
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-light: #eff6ff;
+  --primary-border: #bfdbfe;
+  --secondary: #0284c7;
+  --secondary-light: #f0f9ff;
+
+  --canvas: #f8fafc;
+  --surface: #ffffff;
+  --sidebar: #f1f5f9;
+  --border: #e2e8f0;
+  --border-subtle: #f1f5f9;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-disabled: #94a3b8;
+
+  /* Status Taxonomy */
+  --status-present: #10b981;
+  --status-present-bg: #ecfdf5;
+  --status-present-border: #a7f3d0;
+
+  --status-late: #d97706;
+  --status-late-bg: #fffbeb;
+  --status-late-border: #fde68a;
+
+  --status-absent: #dc2626;
+  --status-absent-bg: #fef2f2;
+  --status-absent-border: #fecaca;
+
+  --status-left-midway: #ea580c;
+  --status-left-midway-bg: #fff7ed;
+  --status-left-midway-border: #fed7aa;
+
+  --status-excused: #0284c7;
+  --status-excused-bg: #f0f9ff;
+  --status-excused-border: #bae6fd;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.08);
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  --sidebar-width: 260px;
+  --header-height: 64px;
+}

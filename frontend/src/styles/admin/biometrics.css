@@ -1,0 +1,18 @@
+/* ==============================================================================
+   Admin Tab: Biometric Management & Reset eKYC (Quản lý Sinh trắc học)
+   ============================================================================== */
+
+.admin-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.admin-preview-img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}

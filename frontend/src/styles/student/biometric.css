@@ -1,0 +1,16 @@
+/* ==============================================================================
+   Student Tab: Biometric Profile (Hồ sơ sinh trắc cá nhân)
+   ============================================================================== */
+
+.biometric-card {
+  max-width: 680px;
+}
+
+.biometric-vector-badge {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 12px;
+  background-color: var(--sidebar);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
