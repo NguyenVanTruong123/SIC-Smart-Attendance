@@ -175,59 +175,221 @@ Hệ thống sử dụng **JWT (JSON Web Token)** với cơ chế **Role-Based A
 
 ### 3.1. Quản lý Phòng học & Camera IP RTSP (`/admin/classrooms`)
 
-#### 📍 3.1.1. Lấy danh sách phòng học
-* **Endpoint:** `GET /api/v1/admin/classrooms` | **Auth:** `ADMIN`
-* **Query Params:** `building` (A2, B1), `status` (`ONLINE`, `OFFLINE`, `MAINTENANCE`), `search`.
+#### 📍 3.1.1. Lấy danh sách phòng học & 3 Thẻ KPI (Màn hình 1.1)
+* **Endpoint:** `GET /api/v1/admin/classrooms` | **Auth:** `ADMIN` (Gửi kèm `Authorization: Bearer <token>`)
+* **Query Params:**
+  * `search`: Tìm kiếm theo Tên phòng, Tòa nhà, hoặc Địa chỉ IP/RTSP.
+  * `building`: Lọc theo Tòa nhà (`ALL`, `Tòa A`, `Tòa B`...).
+  * `status`: Lọc theo Trạng thái Camera (`ALL`, `ONLINE` - Hoạt động, `OFFLINE` - Mất tín hiệu, `MAINTENANCE` - Bảo trì).
+  * `page`: Trang hiện tại (Mặc định: 1).
+  * `limit`: Số bản ghi trên 1 trang (Mặc định: 10).
 * **Success Response (200 OK):**
 ```json
 {
   "success": true,
   "statusCode": 200,
-  "data": [
-    {
-      "id": "c1a2b3c4-0001-0000-0000-000000000001",
-      "roomCode": "A2-301",
-      "building": "Tòa A2",
-      "floor": 3,
-      "capacity": 60,
-      "cameraIp": "192.168.1.101",
-      "rtspUrl": "rtsp://admin:pass@192.168.1.101:554/live/ch0",
-      "cameraStatus": "ONLINE",
-      "latencyMs": 42,
-      "fps": 30
+  "message": "Lấy danh sách phòng học và KPI thành công.",
+  "data": {
+    "kpis": {
+      "totalClassrooms": 50,
+      "onlineCameras": 48,
+      "offlineCameras": 2,
+      "cameraCoverageRate": "100%"
+    },
+    "buildings": ["Tòa A", "Tòa B", "Tòa C"],
+    "items": [
+      {
+        "id": "c1a2b3c4-0001-0000-0000-000000000001",
+        "roomCode": "A2-301",
+        "building": "Tòa A",
+        "floor": 3,
+        "capacity": 45,
+        "roomType": "Phòng Lý thuyết",
+        "deviceType": "iVCam (Mobile Bridge)",
+        "cameraIp": "192.168.1.100",
+        "rtspUrl": "rtsp://192.168.1.100:554/live/ch0",
+        "cameraStatus": "ONLINE",
+        "latencyMs": 118,
+        "fps": 30,
+        "createdAt": "2026-08-26T08:00:00.000Z"
+      },
+      {
+        "id": "c1a2b3c4-0002-0000-0000-000000000002",
+        "roomCode": "B1-102",
+        "building": "Tòa B",
+        "floor": 1,
+        "capacity": 120,
+        "roomType": "Hội trường",
+        "deviceType": "Dahua Smart Cam",
+        "cameraIp": "192.168.1.105",
+        "rtspUrl": "rtsp://192.168.1.105:554/live/ch0",
+        "cameraStatus": "OFFLINE",
+        "latencyMs": null,
+        "fps": 0,
+        "createdAt": "2026-08-26T08:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "totalItems": 50,
+      "totalPages": 5
     }
-  ]
+  },
+  "timestamp": "2026-08-26T09:41:03.856Z"
 }
 ```
 
-#### 📍 3.1.2. Thêm mới / Cập nhật cấu hình Phòng học & Camera
-* **Endpoint:** `POST /api/v1/admin/classrooms` & `PUT /api/v1/admin/classrooms/{id}` | **Auth:** `ADMIN`
+#### 📍 3.1.2. Thêm mới Phòng học & Cấu hình Camera IP (Modal 1.1.2)
+* **Endpoint:** `POST /api/v1/admin/classrooms` | **Auth:** `ADMIN`
 * **Request Body:**
 ```json
 {
-  "roomCode": "B1-102",
-  "building": "Tòa B1",
-  "floor": 1,
-  "capacity": 50,
-  "cameraIp": "192.168.1.102",
-  "rtspUrl": "rtsp://admin:Pass123@192.168.1.102:554/h264Preview_01_main"
+  "roomCode": "A2-502",
+  "building": "Tòa A",
+  "floor": 5,
+  "capacity": 45,
+  "deviceType": "iVCam (Mobile Bridge)",
+  "rtspUrl": "rtsp://192.168.1.15:554/live",
+  "cameraIp": "192.168.1.15"
+}
+```
+* **Success Response (201 Created):**
+```json
+{
+  "success": true,
+  "statusCode": 201,
+  "message": "Thêm mới và kích hoạt phòng học thành công.",
+  "data": {
+    "id": "c1a2b3c4-0003-0000-0000-000000000003",
+    "roomCode": "A2-502",
+    "building": "Tòa A",
+    "floor": 5,
+    "capacity": 45,
+    "cameraIp": "192.168.1.15",
+    "rtspUrl": "rtsp://192.168.1.15:554/live",
+    "cameraStatus": "ONLINE",
+    "createdAt": "2026-08-26T10:00:00.000Z"
+  }
 }
 ```
 
-#### 📍 3.1.3. Kiểm tra kết nối Camera IP (Ping Test - Modal 1.1.1)
-* **Endpoint:** `POST /api/v1/admin/classrooms/{id}/ping-camera` | **Auth:** `ADMIN`
+#### 📍 3.1.3. Cập nhật Cấu hình Phòng học & Gắn Camera IP
+* **Endpoint:** `PUT /api/v1/admin/classrooms/{id}` | **Auth:** `ADMIN`
+* **Request Body:**
+```json
+{
+  "roomCode": "A2-301",
+  "building": "Tòa A",
+  "floor": 3,
+  "capacity": 45,
+  "deviceType": "iVCam (Mobile Bridge)",
+  "rtspUrl": "rtsp://192.168.1.15:4747/live",
+  "cameraIp": "192.168.1.15"
+}
+```
+* **Success Response (200 OK):**
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Cập nhật cấu hình phòng học thành công.",
+  "data": {
+    "id": "c1a2b3c4-0001-0000-0000-000000000001",
+    "roomCode": "A2-301",
+    "building": "Tòa A",
+    "floor": 3,
+    "capacity": 45,
+    "cameraIp": "192.168.1.15",
+    "rtspUrl": "rtsp://192.168.1.15:4747/live",
+    "cameraStatus": "ONLINE"
+  }
+}
+```
+
+#### 📍 3.1.4. Xóa Phòng học
+* **Endpoint:** `DELETE /api/v1/admin/classrooms/{id}` | **Auth:** `ADMIN`
+* **Success Response (200 OK):**
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Xóa phòng học thành công."
+}
+```
+
+#### 📍 3.1.5. Kiểm tra kết nối Camera IP / iVCam (Ping Test - Modal 1.1.2 & 1.1.1)
+* **Endpoint:** `POST /api/v1/admin/classrooms/ping-camera` (Kiểm tra URL trực tiếp khi nhập form) hoặc `POST /api/v1/admin/classrooms/{id}/ping-camera` (Kiểm tra phòng đã có)
+* **Request Body (Khi kiểm tra URL trực tiếp):**
+```json
+{
+  "rtspUrl": "rtsp://192.168.1.15:554/live"
+}
+```
+* **Success Response (200 OK):**
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Kết nối Camera RTSP thành công!",
+  "data": {
+    "status": "ONLINE",
+    "latencyMs": 118,
+    "fps": 30,
+    "packetLossPercent": 0.0,
+    "resolution": "1920x1080",
+    "bitrateKbps": 4096,
+    "codec": "H.264"
+  }
+}
+```
+
+#### 📍 3.1.6. Xem chi tiết Phòng học & Lịch trình ca học hôm nay (Modal 1.1.1)
+* **Endpoint:** `GET /api/v1/admin/classrooms/{id}` | **Auth:** `ADMIN`
 * **Success Response (200 OK):**
 ```json
 {
   "success": true,
   "statusCode": 200,
   "data": {
-    "status": "ONLINE",
-    "latencyMs": 45,
-    "fps": 30,
-    "packetLossPercent": 0.0,
-    "resolution": "1920x1080",
-    "bitrateKbps": 4096
+    "classroom": {
+      "id": "c1a2b3c4-0001-0000-0000-000000000001",
+      "roomCode": "A2-301",
+      "building": "Tòa A",
+      "floor": 3,
+      "capacity": 45,
+      "cameraIp": "192.168.1.100",
+      "rtspUrl": "rtsp://192.168.1.100:554/live/ch0",
+      "cameraStatus": "ONLINE",
+      "latencyMs": 118,
+      "fps": 30,
+      "codec": "H.264",
+      "bitrate": "4.2 Mbps"
+    },
+    "todaySchedule": [
+      {
+        "sessionId": "ses_001",
+        "courseCode": "CS101",
+        "courseName": "Nhập môn AI",
+        "teacherName": "TS. Nguyễn Văn A",
+        "startTime": "07:00",
+        "endTime": "09:30",
+        "status": "LIVE",
+        "attendedCount": 44,
+        "totalStudents": 45
+      },
+      {
+        "sessionId": "ses_002",
+        "courseCode": "SE202",
+        "courseName": "Lập trình Web",
+        "teacherName": "ThS. Trần Thị B",
+        "startTime": "13:00",
+        "endTime": "15:30",
+        "status": "UPCOMING",
+        "attendedCount": 0,
+        "totalStudents": 45
+      }
+    ]
   }
 }
 ```
