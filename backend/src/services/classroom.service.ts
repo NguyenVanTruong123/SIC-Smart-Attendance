@@ -9,6 +9,27 @@ export interface ClassroomFilterParams {
   limit?: number;
 }
 
+export interface CreateClassroomDto {
+  roomCode: string;
+  building: string;
+  floor?: number;
+  capacity?: number;
+  cameraIp?: string;
+  rtspUrl: string;
+  deviceType?: string;
+}
+
+export interface UpdateClassroomDto {
+  roomCode?: string;
+  building?: string;
+  floor?: number;
+  capacity?: number;
+  cameraIp?: string;
+  rtspUrl?: string;
+  cameraStatus?: CameraStatus;
+  deviceType?: string;
+}
+
 export class ClassroomService {
   /**
    * 1. Lấy danh sách phòng học, 3 Thẻ KPI và danh sách Tòa nhà (Màn hình 1.1)
@@ -121,6 +142,115 @@ export class ClassroomService {
         totalPages,
       },
     };
+  }
+
+  /**
+   * 2. Thêm mới một phòng học & cấu hình Camera (Modal 1.1.2)
+   */
+  async createClassroom(dto: CreateClassroomDto) {
+    const existing = await prisma.classroom.findUnique({
+      where: { roomCode: dto.roomCode.trim() },
+    });
+
+    if (existing) {
+      const error: any = new Error(`Phòng học với mã "${dto.roomCode}" đã tồn tại trên hệ thống.`);
+      error.statusCode = 409;
+      error.code = 'ROOM_ALREADY_EXISTS';
+      throw error;
+    }
+
+    // Tách địa chỉ IP từ rtspUrl nếu không truyền cameraIp riêng
+    let cameraIp = dto.cameraIp?.trim();
+    if (!cameraIp && dto.rtspUrl) {
+      const match = dto.rtspUrl.match(/@?([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/);
+      cameraIp = match ? match[1] : '192.168.1.100';
+    }
+
+    const newRoom = await prisma.classroom.create({
+      data: {
+        roomCode: dto.roomCode.trim(),
+        building: dto.building.trim(),
+        floor: Number(dto.floor) || 1,
+        capacity: Number(dto.capacity) || 50,
+        cameraIp: cameraIp || '192.168.1.100',
+        rtspUrl: dto.rtspUrl.trim(),
+        cameraStatus: CameraStatus.ONLINE,
+      },
+    });
+
+    return newRoom;
+  }
+
+  /**
+   * 3. Cập nhật cấu hình phòng học & gắn Camera IP mới (Modal 1.1.2)
+   */
+  async updateClassroom(id: string, dto: UpdateClassroomDto) {
+    const existing = await prisma.classroom.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      const error: any = new Error('Không tìm thấy phòng học yêu cầu cập nhật.');
+      error.statusCode = 404;
+      error.code = 'ROOM_NOT_FOUND';
+      throw error;
+    }
+
+    // Nếu đổi mã phòng, kiểm tra xem có bị trùng với phòng khác không
+    if (dto.roomCode && dto.roomCode.trim() !== existing.roomCode) {
+      const duplicate = await prisma.classroom.findUnique({
+        where: { roomCode: dto.roomCode.trim() },
+      });
+      if (duplicate) {
+        const error: any = new Error(`Mã phòng "${dto.roomCode}" đã được sử dụng bởi phòng khác.`);
+        error.statusCode = 409;
+        error.code = 'ROOM_ALREADY_EXISTS';
+        throw error;
+      }
+    }
+
+    let cameraIp = dto.cameraIp?.trim() || existing.cameraIp;
+    if (dto.rtspUrl && !dto.cameraIp) {
+      const match = dto.rtspUrl.match(/@?([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/);
+      if (match) cameraIp = match[1];
+    }
+
+    const updatedRoom = await prisma.classroom.update({
+      where: { id },
+      data: {
+        ...(dto.roomCode && { roomCode: dto.roomCode.trim() }),
+        ...(dto.building && { building: dto.building.trim() }),
+        ...(dto.floor !== undefined && { floor: Number(dto.floor) }),
+        ...(dto.capacity !== undefined && { capacity: Number(dto.capacity) }),
+        ...(cameraIp && { cameraIp }),
+        ...(dto.rtspUrl && { rtspUrl: dto.rtspUrl.trim() }),
+        ...(dto.cameraStatus && { cameraStatus: dto.cameraStatus }),
+      },
+    });
+
+    return updatedRoom;
+  }
+
+  /**
+   * 4. Xóa phòng học khỏi hệ thống
+   */
+  async deleteClassroom(id: string) {
+    const existing = await prisma.classroom.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      const error: any = new Error('Không tìm thấy phòng học yêu cầu xóa.');
+      error.statusCode = 404;
+      error.code = 'ROOM_NOT_FOUND';
+      throw error;
+    }
+
+    await prisma.classroom.delete({
+      where: { id },
+    });
+
+    return { id, roomCode: existing.roomCode };
   }
 }
 

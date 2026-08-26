@@ -27,6 +27,9 @@ router.post(
 
 // 3. MODULE PHÒNG HỌC & CAMERA IP
 router.get('/classrooms', (req, res, next) => classroomController.getClassrooms(req, res, next));
+router.post('/classrooms', (req, res, next) => classroomController.createClassroom(req, res, next));
+router.put('/classrooms/:id', (req, res, next) => classroomController.updateClassroom(req, res, next));
+router.delete('/classrooms/:id', (req, res, next) => classroomController.deleteClassroom(req, res, next));
 
 
 export default router;
