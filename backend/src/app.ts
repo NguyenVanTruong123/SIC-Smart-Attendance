@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes';
+import adminRoutes from './routes/admin.routes'; 
 
 dotenv.config();
 
@@ -33,6 +34,7 @@ app.get('/api/v1/health', (req: Request, res: Response) => {
 
 // 3. Khai báo các module API chính của hệ thống
 app.use('/api/v1/auth', authRoutes); // <-- 2. Mở cổng API /api/v1/auth
+app.use('/api/v1/admin', adminRoutes);
 
 // 4. Bắt lỗi khi người dùng gọi sai đường dẫn (404 Not Found)
 app.use((req: Request, res: Response) => {
