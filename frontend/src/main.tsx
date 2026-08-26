@@ -7,6 +7,12 @@ import "./styles.css";
 // -----------------------------------------------------------------------------
 type Role = "admin" | "teacher" | "student";
 type User = { id: string; fullName: string; role: Role };
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "/api/v1").replace(/\/$/, "");
+const ACCESS_TOKEN_KEY = "spas.access-token";
+
+function portalUser(user: { id: string; userCode?: string; fullName: string; role: string }): User {
+  return { id: user.userCode ?? user.id, fullName: user.fullName, role: user.role.toLowerCase() as Role };
+}
 
 type Section = {
   id: number;
@@ -115,10 +121,13 @@ const enrollmentSteps: Array<{ pose: Pose; label: string; icon: string }> = [
 // API Helper
 // -----------------------------------------------------------------------------
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
+  const headers = new Headers(init?.headers);
+  const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+  if (token) headers.set("authorization", `Bearer ${token}`);
+  const response = await fetch(`${API_BASE_URL}${path.replace(/^\/api/, "")}`, { ...init, headers });
   const body = response.status === 204 ? null : await response.json();
-  if (!response.ok) throw new Error(body?.error ?? "Không thể xử lý yêu cầu.");
-  return body as T;
+  if (!response.ok) throw new Error(body?.error?.message ?? body?.error ?? "Không thể xử lý yêu cầu.");
+  return (body?.data ?? body) as T;
 }
 
 function matchesSearch(query: string, ...values: Array<string | number | undefined>) {
@@ -226,12 +235,13 @@ function Login({ onLogin }: { onLogin: (user: User) => Promise<void> }) {
     setBusy(true);
     setError("");
     try {
-      const result = await api<{ user: User }>("/api/auth/login", {
+      const result = await api<{ accessToken: string; user: { id: string; userCode?: string; fullName: string; role: string } }>("/api/auth/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId, password }),
+        body: JSON.stringify({ username: userId, password }),
       });
-      await onLogin(result.user);
+      localStorage.setItem(ACCESS_TOKEN_KEY, result.accessToken);
+      await onLogin(portalUser(result.user));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Đăng nhập thất bại.");
     } finally {
@@ -613,7 +623,7 @@ function Enrollment() {
       try {
         const form = new FormData();
         items.forEach((frame, index) => form.append("frames", frame, `pose-${index + 1}.jpg`));
-        const result = await api<{ accepted: number }>("/api/face/enrollment", { method: "POST", body: form });
+        const result = await api<{ accepted: number }>("/api/ai/enroll", { method: "POST", body: form });
         stopCamera(video);
         setVideo(undefined);
         setEnrolledAt(new Date().toISOString());
@@ -636,7 +646,7 @@ function Enrollment() {
       const frame = await capture(video);
       const form = new FormData();
       form.append("image", frame, "pose.jpg");
-      const result = await api<{ pose: string; confidence: number; detail: string }>("/api/face/pose", {
+      const result = await api<{ pose: string; confidence: number; detail: string }>("/api/ai/face-pose", {
         method: "POST",
         body: form,
       });
@@ -1110,12 +1120,13 @@ function TeacherScan({ sections, initialSection }: { sections: Section[]; initia
       try {
         const form = new FormData();
         form.append("image", image, "classroom.jpg");
-        const result = await api<{ faces: number; markedIds: string[] }>(`/api/sections/${selected.id}/recognize`, {
+        const result = await api<{ faces: number; results: Array<{ student_id: string; name: string; score: number }> }>("/api/ai/recognize", {
           method: "POST",
           body: form,
         });
-        setMessage(`AI phát hiện ${result.faces} khuôn mặt. Đã ghi nhận: ${result.markedIds.join(", ") || "Không có sinh viên mới"}.`);
-        await loadRoster();
+        const recognized = result.results.filter((face) => face.student_id).map((face) => `${face.student_id} (${face.score.toFixed(2)})`);
+        setMessage(`AI phát hiện ${result.faces} khuôn mặt. Nhận diện: ${recognized.join(", ") || "Chưa có khuôn mặt đã đăng ký"}.`);
+        await loadRoster().catch(() => undefined);
       } catch (cause) {
         setMessage(cause instanceof Error ? cause.message : "Quét thất bại.");
       } finally {
@@ -2768,15 +2779,20 @@ function App() {
   const [accountOpen, setAccountOpen] = useState(false);
 
   const load = async (current: User) => {
-    const data = await api<{ sections: Section[] }>("/api/sections");
+    const data = await api<{ sections: Section[] }>("/api/sections").catch(() => ({ sections: [] }));
     setUser(current);
     setSections(data.sections);
     setPage(current.role === "teacher" ? "schedule" : "dashboard");
   };
 
   useEffect(() => {
-    api<{ user: User | null }>("/api/auth/me")
-      .then((data) => (data.user ? load(data.user) : undefined))
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    api<{ id: string; userCode?: string; fullName: string; role: string }>("/api/auth/me")
+      .then((data) => load(portalUser(data)))
       .catch(() => undefined)
       .finally(() => setLoading(false));
   }, []);
@@ -2785,7 +2801,7 @@ function App() {
   if (!user) return <Login onLogin={load} />;
 
   const logout = async () => {
-    await api("/api/auth/logout", { method: "POST" });
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
     setUser(undefined);
     setSections([]);
     setAccountOpen(false);
