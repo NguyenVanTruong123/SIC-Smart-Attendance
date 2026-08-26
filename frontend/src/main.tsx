@@ -65,6 +65,40 @@ type ClassroomCamera = {
   fps: number;
 };
 
+type ApiClassroom = {
+  id: string;
+  roomCode: string;
+  building: string;
+  floor: number;
+  capacity: number;
+  cameraIp: string;
+  rtspUrl: string;
+  cameraStatus: "ONLINE" | "OFFLINE" | "MAINTENANCE";
+  latencyMs: number | null;
+  fps: number;
+};
+
+type ClassroomOverview = {
+  kpis: { totalClassrooms: number; onlineCameras: number; offlineCameras: number };
+  items: ApiClassroom[];
+};
+
+type BiometricItem = {
+  id: string;
+  userCode: string;
+  fullName: string;
+  department: string | null;
+  isFaceEnrolled: boolean;
+  vectorId: string | null;
+  enrolledDate: string | null;
+  hasPendingResetRequest: boolean;
+};
+
+type BiometricOverview = {
+  kpis: { totalStudents: number; enrolledCount: number; enrolledRate: string; notEnrolledCount: number; pendingResetRequests: number };
+  items: BiometricItem[];
+};
+
 type AuditRecord = {
   id: string;
   timestamp: string;
@@ -2393,6 +2427,112 @@ function AdminClassrooms() {
 // -----------------------------------------------------------------------------
 // ADMIN: Courses & Sections Management
 // -----------------------------------------------------------------------------
+function SprintOneBiometrics() {
+  const [overview, setOverview] = useState<BiometricOverview>();
+  const [search, setSearch] = useState("");
+  const [message, setMessage] = useState("");
+
+  const load = useCallback(async () => {
+    const params = new URLSearchParams({ role: "STUDENT", limit: "20" });
+    if (search.trim()) params.set("search", search.trim());
+    setOverview(await api<BiometricOverview>(`/api/admin/biometrics?${params}`));
+  }, [search]);
+
+  useEffect(() => {
+    void load().catch((cause) => setMessage(cause instanceof Error ? cause.message : "Không tải được dữ liệu sinh trắc học."));
+  }, [load]);
+
+  const importBundle = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      const result = await api<{ summary: { studentsImported: number; teachersImported: number; classesImported: number; sessionsCreated: number } }>("/api/admin/import/excel-bundle", {
+        method: "POST",
+        body: new FormData(event.currentTarget)
+      });
+      const summary = result.summary;
+      setMessage(`Đã nạp ${summary.studentsImported} sinh viên, ${summary.teachersImported} giảng viên, ${summary.classesImported} lớp và ${summary.sessionsCreated} buổi.`);
+      event.currentTarget.reset();
+      await load();
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : "Không thể nạp dữ liệu Excel.");
+    }
+  };
+
+  return (
+    <div className="stack">
+      <section className="panel">
+        <div className="panel-heading">
+          <div><h2>Trung tâm sinh trắc học</h2><p>{overview ? `${overview.kpis.enrolledCount}/${overview.kpis.totalStudents} đã nạp vector (${overview.kpis.enrolledRate})` : "Đang tải..."}</p></div>
+          <input type="search" placeholder="MSSV hoặc họ tên" value={search} onChange={(event) => setSearch(event.target.value)} />
+        </div>
+        <div className="table-wrap"><table><thead><tr><th>MSSV</th><th>Họ tên</th><th>Vector</th><th>Trạng thái</th><th>Ngày nạp</th></tr></thead><tbody>
+          {overview?.items.map((item) => <tr key={item.id}><td>{item.userCode}</td><td>{item.fullName}</td><td>{item.vectorId ?? "—"}</td><td>{item.isFaceEnrolled ? "Đã nạp" : "Chưa nạp"}</td><td>{item.enrolledDate ?? "—"}</td></tr>)}
+        </tbody></table></div>
+      </section>
+      <section className="panel">
+        <div className="panel-heading"><div><h2>Import dữ liệu 3-trong-1</h2><p>Sinh viên, giảng viên và thời khóa biểu.</p></div></div>
+        <form className="panel-body login-form" onSubmit={(event) => void importBundle(event)}>
+          <label>Sinh viên <input name="student_file" type="file" accept=".xlsx,.xls,.csv" /></label>
+          <label>Giảng viên <input name="teacher_file" type="file" accept=".xlsx,.xls,.csv" /></label>
+          <label>Thời khóa biểu <input name="schedule_file" type="file" accept=".xlsx,.xls,.csv" /></label>
+          <button className="btn-primary" type="submit">Nạp dữ liệu</button>
+        </form>
+      </section>
+      {message && <div className="notice info">{message}</div>}
+    </div>
+  );
+}
+
+function SprintOneClassrooms() {
+  const emptyForm = { roomCode: "", building: "", floor: "", capacity: "", cameraIp: "", rtspUrl: "" };
+  const [overview, setOverview] = useState<ClassroomOverview>();
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string>();
+  const [message, setMessage] = useState("");
+  const load = useCallback(async () => setOverview(await api<ClassroomOverview>("/api/admin/classrooms?limit=50")), []);
+
+  useEffect(() => {
+    void load().catch((cause) => setMessage(cause instanceof Error ? cause.message : "Không tải được phòng học."));
+  }, [load]);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    try {
+      const body = { ...form, floor: Number(form.floor), capacity: Number(form.capacity) };
+      await api(editingId ? `/api/admin/classrooms/${editingId}` : "/api/admin/classrooms", {
+        method: editingId ? "PUT" : "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      setForm(emptyForm);
+      setEditingId(undefined);
+      setMessage("Đã lưu cấu hình phòng học và Camera IP.");
+      await load();
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : "Không thể lưu cấu hình.");
+    }
+  };
+
+  const ping = async (id: string) => {
+    try {
+      const result = await api<{ status: string; latencyMs: number; fps: number }>(`/api/admin/classrooms/${id}/ping-camera`, { method: "POST" });
+      setMessage(`Camera ${result.status}: ${result.latencyMs} ms, ${result.fps} FPS.`);
+      await load();
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : "Không kiểm tra được camera.");
+    }
+  };
+
+  return (
+    <div className="grid-2">
+      <section className="panel"><div className="panel-heading"><div><h2>Phòng học & Camera IP</h2><p>{overview ? `${overview.kpis.onlineCameras}/${overview.kpis.totalClassrooms} camera online` : "Đang tải..."}</p></div></div><div className="table-wrap"><table><thead><tr><th>Phòng</th><th>RTSP</th><th>Trạng thái</th><th /></tr></thead><tbody>
+        {overview?.items.map((room) => <tr key={room.id}><td><b>{room.roomCode}</b><br /><small>{room.building} · Tầng {room.floor}</small></td><td><code>{room.rtspUrl}</code></td><td>{room.cameraStatus} · {room.fps} FPS</td><td><button className="secondary small-button" onClick={() => void ping(room.id)}>Ping</button> <button className="secondary small-button" onClick={() => { setEditingId(room.id); setForm({ roomCode: room.roomCode, building: room.building, floor: String(room.floor), capacity: String(room.capacity), cameraIp: room.cameraIp, rtspUrl: room.rtspUrl }); }}>Sửa</button></td></tr>)}
+      </tbody></table></div></section>
+      <section className="panel"><div className="panel-heading"><div><h2>{editingId ? "Cập nhật phòng học" : "Thêm phòng học"}</h2></div></div><form className="panel-body login-form" onSubmit={(event) => void submit(event)}>{([['roomCode', 'Mã phòng'], ['building', 'Tòa nhà'], ['floor', 'Tầng'], ['capacity', 'Sức chứa'], ['cameraIp', 'IP Camera'], ['rtspUrl', 'RTSP URL']] as const).map(([key, label]) => <label key={key}>{label}<input required value={form[key]} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /></label>)}<button className="btn-primary" type="submit">Lưu cấu hình</button></form>{message && <div className="notice info">{message}</div>}</section>
+    </div>
+  );
+}
+
 function AdminClasses() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [users, setUsers] = useState<StoredUser[]>([]);
@@ -2782,7 +2922,7 @@ function App() {
     const data = await api<{ sections: Section[] }>("/api/sections").catch(() => ({ sections: [] }));
     setUser(current);
     setSections(data.sections);
-    setPage(current.role === "teacher" ? "schedule" : "dashboard");
+    setPage(current.role === "teacher" ? "schedule" : current.role === "admin" ? "classrooms" : "dashboard");
   };
 
   useEffect(() => {
@@ -2865,8 +3005,8 @@ function App() {
     }
   } else {
     if (page === "dashboard") content = <AdminQuickOverview sections={sections} />;
-    else if (page === "biometrics") content = <AdminBiometrics />;
-    else if (page === "classrooms") content = <AdminClassrooms />;
+    else if (page === "biometrics") content = <SprintOneBiometrics />;
+    else if (page === "classrooms") content = <SprintOneClassrooms />;
     else if (page === "classes") content = <AdminClasses />;
     else if (page === "audit") content = <AdminAuditLogs />;
     else if (page === "profile") content = <Profile user={user} />;

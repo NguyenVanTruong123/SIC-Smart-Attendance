@@ -4,6 +4,7 @@ import { verifyToken, authorizeRoles } from '../middlewares/auth.middlewares';
 import { uploadExcel } from '../middlewares/upload.middleware';
 import { importController } from '../controllers/import.controller';
 import { biometricController } from '../controllers/biometric.controller'; 
+import { classroomController } from '../controllers/classroom.controller';
 
 const router = Router();
 
@@ -23,5 +24,14 @@ router.post(
   ]),
   (req, res, next) => importController.importBundle(req, res, next)
 );
+
+// 3. MODULE PHÒNG HỌC & CAMERA IP
+router.get('/classrooms', (req, res, next) => classroomController.getClassrooms(req, res, next));
+router.get('/classrooms/:id', (req, res, next) => classroomController.getClassroomDetail(req, res, next));
+router.post('/classrooms', (req, res, next) => classroomController.createClassroom(req, res, next));
+router.put('/classrooms/:id', (req, res, next) => classroomController.updateClassroom(req, res, next));
+router.delete('/classrooms/:id', (req, res, next) => classroomController.deleteClassroom(req, res, next));
+router.post('/classrooms/ping-camera', (req, res, next) => classroomController.pingCamera(req, res, next));
+router.post('/classrooms/:id/ping-camera', (req, res, next) => classroomController.pingCamera(req, res, next));
 
 export default router;
