@@ -12,6 +12,13 @@ const router = Router();
  */
 router.post('/login', (req, res, next) => authController.login(req, res, next));
 
+/**
+ * @route   POST /api/v1/auth/refresh
+ * @desc    Tự động cấp lại Access Token mới từ Refresh Token
+ * @access  Public
+ */
+router.post('/refresh', (req, res, next) => authController.refresh(req, res, next));
+
 // Route Lấy thông tin cá nhân (Được bảo vệ - Bắt buộc phải có Token JWT hợp lệ)
 router.get('/me', verifyToken, (req, res, next) => authController.getMe(req, res, next));
 

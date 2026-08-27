@@ -101,6 +101,50 @@ export class AuthController {
       });
     }
   }
+
+  /**
+   * [POST] /api/v1/auth/refresh
+   * Cấp lại Access Token mới từ Refresh Token
+   */
+  async refresh(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { refreshToken } = req.body;
+
+      if (!refreshToken) {
+        return res.status(400).json({
+          success: false,
+          statusCode: 400,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Vui lòng cung cấp refreshToken.',
+          },
+          timestamp: new Date().toISOString(),
+          path: req.originalUrl,
+        });
+      }
+
+      const result = await authService.refreshToken(refreshToken);
+
+      return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: 'Cấp lại Access Token thành công.',
+        data: result,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      return res.status(401).json({
+        success: false,
+        statusCode: 401,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: error.message || 'Refresh Token không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.',
+        },
+        timestamp: new Date().toISOString(),
+        path: req.originalUrl,
+      });
+    }
+  }
 }
 
 export const authController = new AuthController();
