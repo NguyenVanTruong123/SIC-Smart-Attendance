@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, Table, Tag, Button, Input, Select, Row, Col, Statistic, Modal, Form, Descriptions, message, Typography } from "antd";
+import { Card, Table, Tag, Button, Input, InputNumber, Select, Row, Col, Statistic, Modal, Form, Descriptions, message, Typography } from "antd";
 import { SearchOutlined, PlusOutlined, EditOutlined, DeleteOutlined, ApiOutlined, EyeOutlined, WifiOutlined, DisconnectOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/utils/api";
@@ -210,8 +210,8 @@ export function AdminClassrooms() {
           <Form.Item name="roomCode" label="Mã phòng" rules={[{ required: true }]}><Input placeholder="VD: A2-502" /></Form.Item>
           <Form.Item name="building" label="Tòa nhà" rules={[{ required: true }]}><Input placeholder="VD: Tòa A" /></Form.Item>
           <Row gutter={12}>
-            <Col span={12}><Form.Item name="floor" label="Tầng" rules={[{ required: true }]}><Input type="number" /></Form.Item></Col>
-            <Col span={12}><Form.Item name="capacity" label="Sức chứa" rules={[{ required: true }]}><Input type="number" /></Form.Item></Col>
+            <Col span={12}><Form.Item name="floor" label="Tầng" rules={[{ required: true }]}><InputNumber min={1} max={50} style={{ width: "100%" }} placeholder="VD: 3" /></Form.Item></Col>
+            <Col span={12}><Form.Item name="capacity" label="Sức chứa" rules={[{ required: true }]}><InputNumber min={1} max={500} style={{ width: "100%" }} placeholder="VD: 45" /></Form.Item></Col>
           </Row>
           <Form.Item name="deviceType" label="Loại camera"><Input placeholder="VD: iVCam (Mobile Bridge)" /></Form.Item>
           <Form.Item name="cameraIp" label="Camera IP" rules={[{ required: true }]}><Input placeholder="192.168.1.15" /></Form.Item>

@@ -12,8 +12,8 @@ const { Title, Text } = Typography;
 // =============================================================================
 
 export function Login() {
-  const [username, setUsername] = useState("2102001@vnu.edu.vn");
-  const [password, setPassword] = useState("Password@123");
+  const [username, setUsername] = useState("admin@vnu.edu.vn");
+  const [password, setPassword] = useState("Admin@123");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const { login } = useAuthStore();
@@ -63,7 +63,7 @@ export function Login() {
                 prefix={<UserOutlined />}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="VD: 2102001@vnu.edu.vn"
+                placeholder="VD: admin@vnu.edu.vn"
                 required
               />
             </Form.Item>
@@ -107,14 +107,14 @@ export function Login() {
             Chọn nhanh tài khoản thử nghiệm:
           </Text>
           <Space wrap>
-            <Button size="small" onClick={() => quickSelect("2102001@vnu.edu.vn", "Password@123")}>
-              🎓 Sinh viên
+            <Button size="small" onClick={() => quickSelect("admin@vnu.edu.vn", "Admin@123")}>
+              🛡️ Quản trị viên
             </Button>
-            <Button size="small" onClick={() => quickSelect("gv.nguyenvana@vnu.edu.vn", "Password@123")}>
+            <Button size="small" onClick={() => quickSelect("gv.nguyenvanan@vnu.edu.vn", "Teacher@123")}>
               👨‍🏫 Giảng viên
             </Button>
-            <Button size="small" onClick={() => quickSelect("admin@spas.edu.vn", "Password@123")}>
-              🛡️ Quản trị viên
+            <Button size="small" onClick={() => quickSelect("21020001@vnu.edu.vn", "Student@123")}>
+              🎓 Sinh viên
             </Button>
           </Space>
         </div>
