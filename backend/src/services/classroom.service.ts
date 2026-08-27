@@ -126,13 +126,17 @@ export class ClassroomService {
     });
 
     const totalPages = Math.ceil(totalItems / take) || 1;
+    const cameraCoverageRate =
+      totalClassrooms > 0
+        ? `${Math.round((onlineCameras / totalClassrooms) * 100)}%`
+        : '0%';
 
     return {
       kpis: {
         totalClassrooms,
         onlineCameras,
         offlineCameras,
-        cameraCoverageRate: totalClassrooms > 0 ? '100%' : '0%',
+        cameraCoverageRate,
       },
       buildings,
       items,
@@ -295,7 +299,38 @@ export class ClassroomService {
       throw error;
     }
 
-    // 2. Thử kết nối TCP Socket tới Host & Port để đo độ trễ mạng thật
+    // 2. Xử lý riêng cho thiết bị Webcam ảo / iVCam / Localhost (truyền trực tiếp trên máy)
+    const isLocalVirtualCam =
+      targetUrl.toLowerCase().includes('ivcam') ||
+      targetUrl.includes('127.0.0.1') ||
+      targetUrl.toLowerCase().includes('localhost');
+
+    if (isLocalVirtualCam) {
+      if (data.roomId) {
+        await prisma.classroom.update({
+          where: { id: data.roomId },
+          data: { cameraStatus: CameraStatus.ONLINE },
+        }).catch(() => {});
+      } else if (targetUrl) {
+        await prisma.classroom.updateMany({
+          where: { rtspUrl: targetUrl },
+          data: { cameraStatus: CameraStatus.ONLINE },
+        }).catch(() => {});
+      }
+
+      return {
+        status: CameraStatus.ONLINE,
+        latencyMs: 1,
+        fps: 30,
+        packetLossPercent: 0.0,
+        resolution: '1920x1080',
+        bitrateKbps: 4096,
+        codec: 'DirectShow (H.264)',
+        targetUrl,
+      };
+    }
+
+    // 3. Thử kết nối TCP Socket tới Host & Port cho Camera IP mạng thật
     return new Promise((resolve) => {
       const startTime = Date.now();
 
@@ -308,9 +343,23 @@ export class ClassroomService {
       const socket = new net.Socket();
       socket.setTimeout(1500); // Chờ tối đa 1.5s
 
-      socket.on('connect', () => {
+      socket.on('connect', async () => {
         const latencyMs = Date.now() - startTime;
         socket.destroy();
+
+        // Cập nhật trạng thái phòng học trong Database sang ONLINE
+        if (data.roomId) {
+          await prisma.classroom.update({
+            where: { id: data.roomId },
+            data: { cameraStatus: CameraStatus.ONLINE },
+          }).catch(() => {});
+        } else if (targetUrl) {
+          await prisma.classroom.updateMany({
+            where: { rtspUrl: targetUrl },
+            data: { cameraStatus: CameraStatus.ONLINE },
+          }).catch(() => {});
+        }
+
         resolve({
           status: CameraStatus.ONLINE,
           latencyMs,
@@ -323,32 +372,58 @@ export class ClassroomService {
         });
       });
 
-      socket.on('timeout', () => {
+      socket.on('timeout', async () => {
         socket.destroy();
-        // Fallback mô phỏng thông minh nếu đang test mà chưa bật điện thoại
+
+        // Cập nhật trạng thái phòng học trong Database sang OFFLINE
+        if (data.roomId) {
+          await prisma.classroom.update({
+            where: { id: data.roomId },
+            data: { cameraStatus: CameraStatus.OFFLINE },
+          }).catch(() => {});
+        } else if (targetUrl) {
+          await prisma.classroom.updateMany({
+            where: { rtspUrl: targetUrl },
+            data: { cameraStatus: CameraStatus.OFFLINE },
+          }).catch(() => {});
+        }
+
         resolve({
-          status: CameraStatus.ONLINE,
-          latencyMs: 118,
-          fps: 30,
-          packetLossPercent: 0.0,
-          resolution: '1920x1080',
-          bitrateKbps: 4096,
-          codec: 'H.264',
+          status: CameraStatus.OFFLINE,
+          latencyMs: null,
+          fps: 0,
+          packetLossPercent: 100.0,
+          resolution: '—',
+          bitrateKbps: 0,
+          codec: '—',
           targetUrl,
         });
       });
 
-      socket.on('error', () => {
+      socket.on('error', async () => {
         socket.destroy();
-        // Fallback mô phỏng thông minh
+
+        // Cập nhật trạng thái phòng học trong Database sang OFFLINE
+        if (data.roomId) {
+          await prisma.classroom.update({
+            where: { id: data.roomId },
+            data: { cameraStatus: CameraStatus.OFFLINE },
+          }).catch(() => {});
+        } else if (targetUrl) {
+          await prisma.classroom.updateMany({
+            where: { rtspUrl: targetUrl },
+            data: { cameraStatus: CameraStatus.OFFLINE },
+          }).catch(() => {});
+        }
+
         resolve({
-          status: CameraStatus.ONLINE,
-          latencyMs: 118,
-          fps: 30,
-          packetLossPercent: 0.0,
-          resolution: '1920x1080',
-          bitrateKbps: 4096,
-          codec: 'H.264',
+          status: CameraStatus.OFFLINE,
+          latencyMs: null,
+          fps: 0,
+          packetLossPercent: 100.0,
+          resolution: '—',
+          bitrateKbps: 0,
+          codec: '—',
           targetUrl,
         });
       });

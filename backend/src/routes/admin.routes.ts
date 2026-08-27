@@ -5,6 +5,7 @@ import { uploadExcel } from '../middlewares/upload.middleware';
 import { importController } from '../controllers/import.controller';
 import { biometricController } from '../controllers/biometric.controller'; 
 import { classroomController } from '../controllers/classroom.controller';
+import { adminClassController } from '../controllers/admin-class.controller';
 
 const router = Router();
 
@@ -33,5 +34,8 @@ router.put('/classrooms/:id', (req, res, next) => classroomController.updateClas
 router.delete('/classrooms/:id', (req, res, next) => classroomController.deleteClassroom(req, res, next));
 router.post('/classrooms/ping-camera', (req, res, next) => classroomController.pingCamera(req, res, next));
 router.post('/classrooms/:id/ping-camera', (req, res, next) => classroomController.pingCamera(req, res, next));
+
+// 4. MODULE MÔN HỌC & LỚP HỌC PHẦN (TREE TABLE)
+router.get('/classes', (req, res, next) => adminClassController.getClasses(req, res, next));
 
 export default router;

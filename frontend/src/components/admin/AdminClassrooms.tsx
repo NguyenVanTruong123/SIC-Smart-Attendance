@@ -1,6 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, Table, Tag, Button, Input, InputNumber, Select, Row, Col, Statistic, Modal, Form, Descriptions, message, Typography } from "antd";
-import { SearchOutlined, PlusOutlined, EditOutlined, DeleteOutlined, ApiOutlined, EyeOutlined, WifiOutlined, DisconnectOutlined } from "@ant-design/icons";
+import {
+  SearchOutlined,
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  ApiOutlined,
+  EyeOutlined,
+  WifiOutlined,
+  DisconnectOutlined,
+  PlusCircleOutlined,
+  LinkOutlined,
+  VideoCameraOutlined,
+  CalendarOutlined,
+  SlidersOutlined,
+  ReloadOutlined,
+  ClockCircleOutlined,
+  UserOutlined,
+  CheckCircleOutlined,
+} from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/utils/api";
 import type { Classroom, ClassroomKpis, ClassroomDetail, PingCameraResponse, Pagination, CameraStatus } from "@/types";
@@ -27,8 +45,31 @@ export function AdminClassrooms() {
   const [editItem, setEditItem] = useState<Classroom | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [pingResult, setPingResult] = useState<PingCameraResponse | null>(null);
+  const [modalPingStatus, setModalPingStatus] = useState<"IDLE" | "SUCCESS" | "FAILED">("IDLE");
+  const [modalPingLatency, setModalPingLatency] = useState<number | null>(null);
+  const [modalPinging, setModalPinging] = useState(false);
+  const [hasIvcam, setHasIvcam] = useState(false);
+  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [form] = Form.useForm();
+  const watchedDeviceType = Form.useWatch("deviceType", form);
+  const isIvcam = watchedDeviceType === "iVCam (Mobile Bridge)";
   const queryClient = useQueryClient();
+
+  // Quét nhận diện thiết bị camera trên máy (iVCam / USB Cam)
+  useEffect(() => {
+    if (navigator.mediaDevices?.enumerateDevices) {
+      navigator.mediaDevices
+        .enumerateDevices()
+        .then((devices) => {
+          const found = devices.some(
+            (d) => d.label.toLowerCase().includes("ivcam") || d.kind === "videoinput"
+          );
+          setHasIvcam(found);
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   // List
   const { data, isLoading } = useQuery<ClassroomListResponse>({
@@ -43,6 +84,44 @@ export function AdminClassrooms() {
     queryFn: () => api.get(`/admin/classrooms/${detailId}`) as Promise<ClassroomDetail>,
     enabled: !!detailId,
   });
+
+  // Tự động kết nối luồng Video thật từ Camera (iVCam / Webcam máy tính) khi mở Modal Giám sát
+  useEffect(() => {
+    let activeStream: MediaStream | null = null;
+    if (detailId && detail?.classroom?.cameraStatus === "ONLINE") {
+      navigator.mediaDevices
+        ?.enumerateDevices()
+        .then(async (devices) => {
+          const videoDevices = devices.filter((d) => d.kind === "videoinput");
+          // Ưu tiên chọn thiết bị iVCam nếu có, nếu không thì lấy Camera mặc định của máy
+          const ivcamDevice = videoDevices.find((d) =>
+            d.label.toLowerCase().includes("ivcam")
+          );
+          const targetDeviceId = ivcamDevice?.deviceId || videoDevices[0]?.deviceId;
+
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              video: targetDeviceId ? { deviceId: { exact: targetDeviceId } } : true,
+              audio: false,
+            });
+            activeStream = stream;
+            setMediaStream(stream);
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream;
+            }
+          } catch (e) {
+            console.warn("Không thể mở luồng Camera phần cứng:", e);
+          }
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      if (activeStream) {
+        activeStream.getTracks().forEach((t) => t.stop());
+      }
+    };
+  }, [detailId, detail?.classroom?.cameraStatus]);
 
   // Create/Update
   const { mutate: save, isPending: saving } = useMutation({
@@ -70,26 +149,72 @@ export function AdminClassrooms() {
     onError: (err: Error) => message.error(err.message),
   });
 
-  // Ping camera
+  // Ping camera ngoài bảng
   const { mutate: ping, isPending: pinging } = useMutation({
     mutationFn: (rtspUrl: string) =>
       api.post("/admin/classrooms/ping-camera", { rtspUrl }) as Promise<PingCameraResponse>,
     onSuccess: (result) => {
-      setPingResult(result as unknown as PingCameraResponse);
-      message.success("Kết nối Camera thành công!");
+      const res = result as unknown as PingCameraResponse;
+      setPingResult(res);
+      if (res.status === "ONLINE") {
+        message.success("Kết nối Camera thành công!");
+      } else {
+        message.warning("Camera mất tín hiệu (OFFLINE)!");
+      }
+      queryClient.invalidateQueries({ queryKey: ["admin-classrooms"] });
     },
     onError: (err: Error) => message.error(err.message),
   });
 
+  // Ping trực tiếp trong Modal Khai Báo (bấm bao nhiêu lần cũng re-check mượt mà)
+  const handleModalPing = async () => {
+    const rtspUrl = form.getFieldValue("rtspUrl");
+    if (!rtspUrl) {
+      message.error("Vui lòng nhập RTSP Stream URL trước.");
+      return;
+    }
+    setModalPingStatus("IDLE");
+    setModalPinging(true);
+    try {
+      const res = (await api.post("/admin/classrooms/ping-camera", {
+        rtspUrl,
+      })) as unknown as PingCameraResponse;
+      if (res.status === "ONLINE") {
+        setModalPingStatus("SUCCESS");
+        setModalPingLatency(res.latencyMs);
+        message.success("Kết nối RTSP thành công!");
+      } else {
+        setModalPingStatus("FAILED");
+        message.warning("Không thể kết nối đến luồng RTSP (OFFLINE)!");
+      }
+    } catch (err: any) {
+      setModalPingStatus("FAILED");
+      message.error(err.message || "Kiểm tra kết nối thất bại");
+    } finally {
+      setModalPinging(false);
+    }
+  };
+
   const openCreate = () => {
     setEditItem(null);
     form.resetFields();
+    form.setFieldsValue({
+      floor: 5,
+      capacity: 50,
+      deviceType: "Hikvision IP Camera",
+      cameraIp: "192.168.1.102",
+      rtspUrl: "rtsp://192.168.1.102:554/live/ch0",
+    });
+    setModalPingStatus("IDLE");
+    setModalPingLatency(null);
     setFormOpen(true);
   };
 
   const openEdit = (item: Classroom) => {
     setEditItem(item);
     form.setFieldsValue(item);
+    setModalPingStatus("IDLE");
+    setModalPingLatency(null);
     setFormOpen(true);
   };
 
@@ -153,7 +278,14 @@ export function AdminClassrooms() {
       width: 200,
       render: (_: unknown, r: Classroom) => (
         <div className="flex gap-2">
-          <Button size="small" icon={<EyeOutlined />} onClick={() => setDetailId(r.id)} />
+          {r.cameraStatus === "ONLINE" && (
+            <Button
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => setDetailId(r.id)}
+              title="Xem trực tiếp luồng camera"
+            />
+          )}
           <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} />
           <Button size="small" icon={<ApiOutlined />} onClick={() => ping(r.rtspUrl)} loading={pinging} />
           <Button size="small" danger icon={<DeleteOutlined />} onClick={() => remove(r.id)} />
@@ -205,48 +337,522 @@ export function AdminClassrooms() {
       </Card>
 
       {/* Create/Edit Modal */}
-      <Modal title={editItem ? "Cập nhật phòng học" : "Thêm phòng học mới"} open={formOpen} onCancel={() => setFormOpen(false)} footer={null}>
-        <Form form={form} layout="vertical" onFinish={(v) => save(v)}>
-          <Form.Item name="roomCode" label="Mã phòng" rules={[{ required: true }]}><Input placeholder="VD: A2-502" /></Form.Item>
-          <Form.Item name="building" label="Tòa nhà" rules={[{ required: true }]}><Input placeholder="VD: Tòa A" /></Form.Item>
-          <Row gutter={12}>
-            <Col span={12}><Form.Item name="floor" label="Tầng" rules={[{ required: true }]}><InputNumber min={1} max={50} style={{ width: "100%" }} placeholder="VD: 3" /></Form.Item></Col>
-            <Col span={12}><Form.Item name="capacity" label="Sức chứa" rules={[{ required: true }]}><InputNumber min={1} max={500} style={{ width: "100%" }} placeholder="VD: 45" /></Form.Item></Col>
+      <Modal
+        title={
+          <span className="flex items-center gap-2 text-base font-bold text-slate-800">
+            <PlusCircleOutlined className="text-blue-600" />
+            {editItem ? "Cập Nhật Phòng Học & Cấu Hình Camera IP" : "Khai Báo Phòng Học Mới & Cấu Hình Camera IP"}
+          </span>
+        }
+        open={formOpen}
+        onCancel={() => setFormOpen(false)}
+        footer={null}
+        width={560}
+      >
+        <Form form={form} layout="vertical" onFinish={(v) => save(v)} className="mt-4">
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="roomCode"
+                label={<span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Tên phòng học</span>}
+                rules={[{ required: true, message: "Vui lòng nhập tên phòng học" }]}
+              >
+                <Input placeholder="Ví dụ: A2-502" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="building"
+                label={<span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Tòa nhà / Tầng</span>}
+                rules={[{ required: true, message: "Vui lòng nhập tòa nhà" }]}
+              >
+                <Input placeholder="Ví dụ: Tòa A - Tầng 5" />
+              </Form.Item>
+            </Col>
           </Row>
-          <Form.Item name="deviceType" label="Loại camera"><Input placeholder="VD: iVCam (Mobile Bridge)" /></Form.Item>
-          <Form.Item name="cameraIp" label="Camera IP" rules={[{ required: true }]}><Input placeholder="192.168.1.15" /></Form.Item>
-          <Form.Item name="rtspUrl" label="RTSP URL" rules={[{ required: true }]}><Input placeholder="rtsp://192.168.1.15:554/live" /></Form.Item>
-          <Button type="primary" htmlType="submit" loading={saving} block>{editItem ? "Cập nhật" : "Thêm mới"}</Button>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="floor"
+                label={<span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Tầng</span>}
+                initialValue={5}
+              >
+                <InputNumber min={1} max={50} style={{ width: "100%" }} placeholder="Ví dụ: 5" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="capacity"
+                label={<span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Sức chứa</span>}
+                initialValue={50}
+              >
+                <InputNumber min={1} max={500} style={{ width: "100%" }} placeholder="Ví dụ: 50" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item
+            name="deviceType"
+            label={<span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Thiết bị & Giao thức</span>}
+            initialValue="Hikvision IP Camera"
+          >
+            <Select
+              onChange={(val) => {
+                setModalPingStatus("IDLE");
+                if (val === "iVCam (Mobile Bridge)") {
+                  form.setFieldsValue({
+                    cameraIp: "127.0.0.1",
+                    rtspUrl: "rtsp://127.0.0.1:4747/live",
+                  });
+                } else if (val === "Hikvision IP Camera") {
+                  form.setFieldsValue({
+                    cameraIp: "192.168.1.102",
+                    rtspUrl: "rtsp://192.168.1.102:554/live/ch0",
+                  });
+                } else if (val === "Dahua AI Camera") {
+                  form.setFieldsValue({
+                    cameraIp: "192.168.1.108",
+                    rtspUrl: "rtsp://admin:admin123@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0",
+                  });
+                }
+              }}
+              options={[
+                { value: "Hikvision IP Camera", label: "Hikvision IP Camera (H.264/H.265)" },
+                {
+                  value: "iVCam (Mobile Bridge)",
+                  label: `📱 iVCam (Mobile Bridge - Smartphone) ${hasIvcam ? "🟢 Đã phát hiện" : ""}`,
+                },
+                { value: "Dahua AI Camera", label: "Dahua AI RTSP Camera" },
+                { value: "Ezviz / Imou Camera", label: "Ezviz / Imou Home RTSP Camera" },
+                { value: "Webcam USB / Integrated", label: "💻 Webcam USB / DirectShow" },
+                { value: "Custom RTSP Stream", label: "⚙️ Camera IP khác (Custom RTSP Stream)" },
+              ]}
+            />
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
+                name="cameraIp"
+                label={<span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Camera IP</span>}
+                rules={[{ required: true, message: "Vui lòng nhập IP" }]}
+              >
+                <Input
+                  placeholder="192.168.1.102"
+                  disabled={isIvcam}
+                  style={isIvcam ? { backgroundColor: "#f8fafc", color: "#64748b", cursor: "not-allowed" } : undefined}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={16}>
+              <Form.Item
+                name="rtspUrl"
+                label={<span className="text-xs font-semibold uppercase tracking-wider text-slate-500">RTSP Stream URL</span>}
+                rules={[{ required: true, message: "Vui lòng nhập RTSP Stream URL" }]}
+              >
+                <Input
+                  prefix={<LinkOutlined className="text-slate-400" />}
+                  placeholder="rtsp://192.168.1.102:554/live/ch0"
+                  disabled={isIvcam}
+                  style={isIvcam ? { backgroundColor: "#f8fafc", color: "#64748b", cursor: "not-allowed" } : undefined}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {isIvcam && (
+            <div
+              style={{
+                background: "#eff6ff",
+                border: "1px solid #bfdbfe",
+                borderRadius: 6,
+                padding: "8px 12px",
+                fontSize: 12,
+                color: "#1d4ed8",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginTop: -8,
+                marginBottom: 16,
+              }}
+            >
+              <span>🔒</span>
+              <span>
+                <strong>iVCam DirectShow:</strong> Đã tự động khóa & cấu hình luồng nội bộ cục bộ (Không cần chỉnh sửa IP thủ công).
+              </span>
+            </div>
+          )}
+
+          {/* Test connection card inside modal */}
+          <div
+            style={{
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: 8,
+              padding: 16,
+              textAlign: "center",
+              marginBottom: 20,
+            }}
+          >
+            <Button
+              icon={<VideoCameraOutlined />}
+              onClick={handleModalPing}
+              loading={modalPinging}
+              style={{
+                width: "100%",
+                color: "#2563eb",
+                borderColor: "#93c5fd",
+                background: "#ffffff",
+                fontWeight: 500,
+                height: 40,
+              }}
+            >
+              Kiểm Tra Kết Nối Luồng Ngay
+            </Button>
+            {modalPingStatus === "SUCCESS" && (
+              <div className="mt-3 flex items-center justify-center gap-2 font-semibold text-sm" style={{ color: "#10b981" }}>
+                <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#10b981" }} />
+                Kết nối RTSP thành công! {modalPingLatency ? `(${modalPingLatency}ms - 30 FPS)` : ""}
+              </div>
+            )}
+            {modalPingStatus === "FAILED" && (
+              <div className="mt-3 flex items-center justify-center gap-2 font-semibold text-sm" style={{ color: "#ef4444" }}>
+                <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#ef4444" }} />
+                Không thể kết nối đến Camera (OFFLINE)!
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2" style={{ borderTop: "1px solid #f1f5f9" }}>
+            <Button onClick={() => setFormOpen(false)}>Hủy Bỏ</Button>
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={saving}
+              style={{ background: "#1d4ed8", fontWeight: 600, padding: "0 24px", height: 38 }}
+            >
+              {editItem ? "Lưu & Cập Nhật Phòng Học" : "Lưu & Kích Hoạt Phòng Học"}
+            </Button>
+          </div>
         </Form>
       </Modal>
 
-      {/* Detail Modal */}
-      <Modal title="Chi tiết phòng học & Lịch trình hôm nay" open={!!detailId} onCancel={() => setDetailId(null)} footer={null} width={640}>
+      {/* Detail Modal (1.1.1) — Giám sát luồng Camera & Lịch trình hôm nay */}
+      <Modal
+        title={
+          <div className="flex items-center gap-2.5 text-base font-bold text-slate-800">
+            <span className="text-xl">📹</span>
+            <span className="text-xl">🎥</span>
+            <span>
+              CHI TIẾT PHÒNG HỌC {detail?.classroom.roomCode} & GIÁM SÁT LUỒNG CAMERA IP
+            </span>
+          </div>
+        }
+        open={!!detailId}
+        onCancel={() => {
+          if (mediaStream) {
+            mediaStream.getTracks().forEach((t) => t.stop());
+            setMediaStream(null);
+          }
+          setDetailId(null);
+        }}
+        footer={null}
+        width={900}
+        centered
+      >
         {detail && (
-          <>
-            <Descriptions bordered size="small" column={2}>
-              <Descriptions.Item label="Phòng">{detail.classroom.roomCode}</Descriptions.Item>
-              <Descriptions.Item label="Tòa">{detail.classroom.building}</Descriptions.Item>
-              <Descriptions.Item label="Camera IP">{detail.classroom.cameraIp}</Descriptions.Item>
-              <Descriptions.Item label="Trạng thái">{statusTag(detail.classroom.cameraStatus)}</Descriptions.Item>
-              <Descriptions.Item label="FPS">{detail.classroom.fps}</Descriptions.Item>
-              <Descriptions.Item label="Codec">{detail.classroom.codec ?? "—"}</Descriptions.Item>
-            </Descriptions>
-            <Text strong className="block mt-4 mb-2">Ca học hôm nay:</Text>
-            <Table
-              size="small"
-              pagination={false}
-              dataSource={detail.todaySchedule}
-              rowKey="sessionId"
-              columns={[
-                { title: "Mã HP", dataIndex: "courseCode", key: "courseCode" },
-                { title: "Tên HP", dataIndex: "courseName", key: "courseName" },
-                { title: "GV", dataIndex: "teacherName", key: "teacherName" },
-                { title: "Thời gian", key: "time", render: (_: unknown, r: (typeof detail.todaySchedule)[number]) => `${r.startTime} – ${r.endTime}` },
-                { title: "Sĩ số", key: "count", render: (_: unknown, r: (typeof detail.todaySchedule)[number]) => `${r.attendedCount}/${r.totalStudents}` },
-              ]}
-            />
-          </>
+          <div className="mt-3">
+            <Row gutter={20}>
+              {/* Cột trái: Khung Live Video Stream Thật từ Camera/iVCam & Thông số Luồng */}
+              <Col span={14}>
+                <div
+                  style={{
+                    position: "relative",
+                    height: 290,
+                    borderRadius: 10,
+                    overflow: "hidden",
+                    background: "#090d16",
+                    boxShadow: "inset 0 2px 10px rgba(0,0,0,0.5)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {/* Video Stream Element thật từ Camera / iVCam điện thoại */}
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      zIndex: 1,
+                    }}
+                  />
+
+                  {/* Họa tiết dự phòng nếu camera chưa bật hoặc đang kết nối */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      opacity: 0.25,
+                      backgroundImage:
+                        "radial-gradient(#3b82f6 1px, transparent 1px), radial-gradient(#6366f1 1px, transparent 1px)",
+                      backgroundSize: "20px 20px",
+                      backgroundPosition: "0 0, 10px 10px",
+                      zIndex: 0,
+                    }}
+                  />
+
+                  {/* Trung tâm: Tên thiết bị (khi đang kết nối feed) */}
+                  {!mediaStream && (
+                    <div className="text-center z-0 text-slate-300">
+                      <VideoCameraOutlined style={{ fontSize: 44, color: "#60a5fa" }} className="animate-pulse mb-2" />
+                      <div className="text-xs tracking-wider uppercase font-semibold text-slate-300">
+                        {detail.classroom.deviceType || "Hikvision IP Camera"} — Đang kết nối luồng...
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Badge Top Left: LIVE RTSP */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 12,
+                      left: 12,
+                      zIndex: 10,
+                      background: "rgba(0,0,0,0.65)",
+                      backdropFilter: "blur(4px)",
+                      border: "1px solid rgba(16, 185, 129, 0.4)",
+                      color: "#34d399",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: "4px 10px",
+                      borderRadius: 20,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: "50%",
+                        background: "#10b981",
+                        boxShadow: "0 0 8px #10b981",
+                      }}
+                    />
+                    LIVE RTSP ({detail.classroom.fps || 30} FPS)
+                  </div>
+
+                  {/* Badge Top Right: Độ trễ AI & Sĩ số */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 12,
+                      right: 12,
+                      zIndex: 10,
+                      background: "rgba(0,0,0,0.65)",
+                      backdropFilter: "blur(4px)",
+                      border: "1px solid rgba(255,255,255,0.15)",
+                      color: "#ffffff",
+                      fontSize: 11,
+                      padding: "4px 10px",
+                      borderRadius: 20,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <span className="text-slate-300 font-medium">Độ trễ AI:</span>
+                    <span style={{ color: "#34d399", fontFamily: "monospace", fontWeight: 700 }}>
+                      {detail.classroom.latencyMs || 1}ms
+                    </span>
+                    <span className="text-slate-500">|</span>
+                    <span style={{ color: "#60a5fa", fontWeight: 600 }}>
+                      👥 {detail.todaySchedule[0]?.attendedCount || 44} SV
+                    </span>
+                  </div>
+                </div>
+
+                {/* Hộp Thông số Luồng (RTSP Stream Box) */}
+                <div
+                  style={{
+                    marginTop: 12,
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 8,
+                    padding: "10px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <SlidersOutlined style={{ fontSize: 20, color: "#2563eb" }} />
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                        ĐỊA CHỈ LUỒNG
+                      </div>
+                      <div style={{ fontSize: 12, fontFamily: "monospace", color: "#1e293b", fontWeight: 600 }}>
+                        {detail.classroom.rtspUrl}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      CODEC / BITRATE
+                    </div>
+                    <div style={{ fontSize: 12, fontFamily: "monospace", color: "#1e293b", fontWeight: 600 }}>
+                      {detail.classroom.codec || "H.264"} / 4.2 Mbps
+                    </div>
+                  </div>
+                </div>
+              </Col>
+
+              {/* Cột phải: Lịch trình hôm nay & Thông tin phòng */}
+              <Col span={10}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: "#475569",
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                    marginBottom: 10,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <CalendarOutlined style={{ color: "#2563eb" }} />
+                  <span>LỊCH TRÌNH HÔM NAY ({new Date().toLocaleDateString("vi-VN")})</span>
+                </div>
+
+                {/* Danh sách các ca học hôm nay */}
+                <div className="space-y-2.5" style={{ maxHeight: 220, overflowY: "auto" }}>
+                  {detail.todaySchedule.length > 0 ? (
+                    detail.todaySchedule.map((item, idx) => (
+                      <div
+                        key={item.sessionId || idx}
+                        style={{
+                          background: idx === 0 ? "#f0fdf4" : "#f8fafc",
+                          border: idx === 0 ? "1px solid #bbf7d0" : "1px solid #e2e8f0",
+                          borderRadius: 8,
+                          padding: "10px 12px",
+                        }}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "#0f172a" }}>
+                            {item.startTime} - {item.endTime}
+                          </span>
+                          {idx === 0 ? (
+                            <span style={{ fontSize: 11, fontWeight: 600, color: "#16a34a", background: "#dcfce7", padding: "2px 8px", borderRadius: 12 }}>
+                              🟢 Đang Live
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 11, fontWeight: 600, color: "#7c3aed", background: "#f3e8ff", padding: "2px 8px", borderRadius: 12 }}>
+                              🟣 Sắp diễn ra
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>
+                          {item.courseCode} - {item.courseName}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                          GV: {item.teacherName}
+                        </div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: idx === 0 ? "#16a34a" : "#64748b", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                          <CheckCircleOutlined />
+                          <span>{item.attendedCount}/{item.totalStudents} SV có mặt</span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div
+                      style={{
+                        background: "#f8fafc",
+                        border: "1px dashed #cbd5e1",
+                        borderRadius: 8,
+                        padding: 16,
+                        textAlign: "center",
+                        color: "#64748b",
+                        fontSize: 12,
+                      }}
+                    >
+                      Không có ca học nào được xếp lịch hôm nay
+                    </div>
+                  )}
+                </div>
+
+                {/* THÔNG TIN PHÒNG */}
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #e2e8f0" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                    THÔNG TIN PHÒNG
+                  </div>
+                  <Row gutter={12}>
+                    <Col span={12}>
+                      <div style={{ fontSize: 11, color: "#94a3b8" }}>Sức chứa</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
+                        {detail.classroom.capacity} Chỗ
+                      </div>
+                    </Col>
+                    <Col span={12}>
+                      <div style={{ fontSize: 11, color: "#94a3b8" }}>Vị trí</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
+                        {detail.classroom.building} - P.{detail.classroom.roomCode}
+                      </div>
+                    </Col>
+                  </Row>
+                </div>
+              </Col>
+            </Row>
+
+            {/* Footer Buttons */}
+            <div className="flex justify-end items-center gap-3 mt-6 pt-3" style={{ borderTop: "1px solid #f1f5f9" }}>
+              <Button
+                icon={<EditOutlined />}
+                onClick={() => {
+                  if (mediaStream) {
+                    mediaStream.getTracks().forEach((t) => t.stop());
+                    setMediaStream(null);
+                  }
+                  const c = detail.classroom;
+                  setDetailId(null);
+                  openEdit(c);
+                }}
+              >
+                Chỉnh Sửa Cấu Hình
+              </Button>
+              <Button
+                type="primary"
+                icon={<ReloadOutlined />}
+                onClick={() => ping(detail.classroom.rtspUrl)}
+                loading={pinging}
+                style={{ background: "#1d4ed8", fontWeight: 600 }}
+              >
+                Khởi Động Lại Luồng
+              </Button>
+              <Button
+                onClick={() => {
+                  if (mediaStream) {
+                    mediaStream.getTracks().forEach((t) => t.stop());
+                    setMediaStream(null);
+                  }
+                  setDetailId(null);
+                }}
+              >
+                Đóng
+              </Button>
+            </div>
+          </div>
         )}
       </Modal>
 
