@@ -150,27 +150,75 @@ function AppShell() {
         style={{ position: "fixed", height: "100vh", left: 0, top: 0, zIndex: 100 }}
       >
         {/* Brand */}
-        <div className="flex items-center gap-3 px-5 py-5">
-          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary text-white text-lg font-bold">
+        <div className="sidebar-brand-wrapper" style={{ padding: "24px 20px 16px 20px", display: "flex", alignItems: "center", gap: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 38,
+              height: 38,
+              borderRadius: 10,
+              backgroundColor: "#2563eb",
+              color: "#ffffff",
+              fontSize: 18,
+              fontWeight: 800,
+              flexShrink: 0,
+              boxShadow: "0 4px 6px -1px rgba(37, 99, 235, 0.25)",
+            }}
+          >
             S
           </div>
           {!collapsed && (
-            <div>
-              <div className="font-bold text-sm text-text-primary">SPAS Portal</div>
-              <div className="text-xs text-text-muted">Academic v6.0</div>
+            <div style={{ overflow: "hidden" }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#0f172a", lineHeight: 1.2 }}>SPAS Portal</div>
+              <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>Academic v6.0</div>
             </div>
           )}
         </div>
 
         {/* User Info */}
         {!collapsed && (
-          <div className="flex items-center gap-3 mx-4 mb-4 p-3 rounded-lg bg-canvas">
-            <Avatar style={{ backgroundColor: "#2563eb" }} size={36}>
+          <div
+            className="sidebar-user-card"
+            style={{
+              margin: "0 16px 16px 16px",
+              padding: "10px 12px",
+              borderRadius: 10,
+              backgroundColor: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            <Avatar style={{ backgroundColor: "#2563eb", flexShrink: 0 }} size={34}>
               {user.fullName.charAt(0).toUpperCase()}
             </Avatar>
-            <div className="overflow-hidden">
-              <div className="font-semibold text-sm truncate">{user.fullName}</div>
-              <div className="text-xs text-text-muted">{roleLabels[user.role]}</div>
+            <div style={{ overflow: "hidden", minWidth: 0 }}>
+              <div
+                style={{
+                  fontWeight: 600,
+                  fontSize: 13,
+                  color: "#0f172a",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {user.fullName}
+              </div>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#64748b",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {roleLabels[user.role]}
+              </div>
             </div>
           </div>
         )}

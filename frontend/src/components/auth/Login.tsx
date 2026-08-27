@@ -154,13 +154,13 @@ export function Login() {
             Chọn nhanh tài khoản thử nghiệm:
           </Text>
           <Space wrap>
-            <Button size="small" onClick={() => quickSelect("admin@vnu.edu.vn", "Admin@123")}>
+            <Button htmlType="button" size="small" onClick={() => quickSelect("admin@vnu.edu.vn", "Admin@123")}>
               🛡️ Quản trị viên
             </Button>
-            <Button size="small" onClick={() => quickSelect("gv.nguyenvanan@vnu.edu.vn", "Teacher@123")}>
+            <Button htmlType="button" size="small" onClick={() => quickSelect("gv.nguyenvanan@vnu.edu.vn", "Teacher@123")}>
               👨‍🏫 Giảng viên
             </Button>
-            <Button size="small" onClick={() => quickSelect("21020001@vnu.edu.vn", "Student@123")}>
+            <Button htmlType="button" size="small" onClick={() => quickSelect("21020001@vnu.edu.vn", "Student@123")}>
               🎓 Sinh viên
             </Button>
           </Space>
