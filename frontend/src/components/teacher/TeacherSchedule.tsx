@@ -1,16 +1,9 @@
 import { useState, useMemo } from "react";
-import { Button, Tag, Typography, Spin, Tooltip } from "antd";
+import { Button, Tag, Typography, Spin } from "antd";
 import {
   LeftOutlined,
   RightOutlined,
-  VideoCameraOutlined,
-  ClockCircleOutlined,
-  EnvironmentOutlined,
-  TeamOutlined,
-  CheckCircleFilled,
-  SyncOutlined,
   ArrowRightOutlined,
-  CalendarOutlined,
 } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/utils/api";
@@ -18,7 +11,7 @@ import api from "@/utils/api";
 const { Text, Title } = Typography;
 
 // =============================================================================
-// Teacher: Weekly Schedule — Time Grid Calendar (Khớp 100% Mockup người dùng)
+// Teacher: Weekly Schedule — Real-time Proportional Google Calendar Time Grid
 // =============================================================================
 
 export interface TeacherCalendarSession {
@@ -59,30 +52,26 @@ export interface TeacherScheduleResponse {
   sessions: TeacherCalendarSession[];
 }
 
-const timeSlots = [
-  "07:00",
-  "08:00",
-  "09:00",
-  "10:00",
-  "11:00",
-  "12:00",
-  "13:00",
-  "14:00",
-  "15:00",
-  "16:00",
-  "17:00",
-];
+// Cấu hình mốc giờ bắt đầu & kết thúc của Time Grid (Từ 07:00 đến 23:00)
+const START_HOUR = 7; // 07:00
+const END_HOUR = 23; // 23:00
+const HOUR_HEIGHT = 70; // 70px cho mỗi 1 giờ (1 phút = 1.166px)
+
+const hoursArray = Array.from(
+  { length: END_HOUR - START_HOUR + 1 },
+  (_, i) => START_HOUR + i
+);
 
 export function TeacherSchedule({
   onStartScan,
 }: {
   onStartScan: (sessionId: string) => void;
 }) {
-  // Quản lý tuần hiện tại (Tính mốc Thứ 2 của tuần)
+  // Quản lý tuần hiện tại (Mốc Thứ 2)
   const [currentMonday, setCurrentMonday] = useState<Date>(() => {
     const d = new Date();
     const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Thứ 2 là ngày bắt đầu
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
     const mon = new Date(d.setDate(diff));
     mon.setHours(0, 0, 0, 0);
     return mon;
@@ -94,19 +83,20 @@ export function TeacherSchedule({
       dayOfWeek: number;
       label: string;
       dateStr: string;
+      dayNumber: string;
       formattedDate: string;
       isToday: boolean;
       fullDate: Date;
     }> = [];
 
     const dayLabels = [
-      "Thứ 2",
-      "Thứ 3",
-      "Thứ 4",
-      "Thứ 5",
-      "Thứ 6",
-      "Thứ 7",
-      "Chủ Nhật",
+      "THỨ 2",
+      "THỨ 3",
+      "THỨ 4",
+      "THỨ 5",
+      "THỨ 6",
+      "THỨ 7",
+      "CN",
     ];
     const today = new Date();
 
@@ -124,9 +114,10 @@ export function TeacherSchedule({
       const dateString = `${date.getFullYear()}-${monthNum}-${dayNum}`;
 
       days.push({
-        dayOfWeek: i + 2, // 2: Thứ 2 ... 8: Chủ nhật
+        dayOfWeek: i + 2,
         label: dayLabels[i],
         dateStr: dateString,
+        dayNumber: dayNum,
         formattedDate: `${dayNum}/${monthNum}`,
         isToday,
         fullDate: date,
@@ -135,18 +126,18 @@ export function TeacherSchedule({
     return days;
   }, [currentMonday]);
 
-  // Chuỗi hiển thị khoảng thời gian: "Tuần này: 12/10 - 18/10/2026"
+  // Chuỗi tuần: "Tuần 42 (13/10/2026 - 19/10/2026)"
   const weekRangeText = useMemo(() => {
     const start = weekDays[0];
     const end = weekDays[6];
     const year = currentMonday.getFullYear();
-    return `Tuần này: ${start.formattedDate} - ${end.formattedDate}/${year}`;
+    return `Tuần (${start.formattedDate}/${year} - ${end.formattedDate}/${year})`;
   }, [weekDays, currentMonday]);
 
   const startDateStr = weekDays[0].dateStr;
   const endDateStr = weekDays[6].dateStr;
 
-  // Gọi API lấy dữ liệu lịch dạy
+  // Gọi API lịch dạy
   const { data, isLoading } = useQuery<TeacherScheduleResponse>({
     queryKey: ["teacher-schedule", startDateStr, endDateStr],
     queryFn: () =>
@@ -179,127 +170,185 @@ export function TeacherSchedule({
     setCurrentMonday(mon);
   };
 
+  // Tính vị trí top và chiều cao theo phút
+  const calculateSessionStyle = (startTimeStr: string, endTimeStr: string) => {
+    const [startH, startM] = startTimeStr.split(":").map(Number);
+    const [endH, endM] = endTimeStr.split(":").map(Number);
+
+    const startTotalMinutes = startH * 60 + startM;
+    const endTotalMinutes = endH * 60 + endM;
+    const gridStartTotalMinutes = START_HOUR * 60;
+
+    const minuteHeight = HOUR_HEIGHT / 60;
+    const top = Math.max(0, (startTotalMinutes - gridStartTotalMinutes) * minuteHeight);
+    const durationMinutes = Math.max(30, endTotalMinutes - startTotalMinutes);
+    const height = durationMinutes * minuteHeight;
+
+    return { top: `${top}px`, height: `${height}px` };
+  };
+
+  const totalGridHeight = (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT;
+
   return (
     <div className="space-y-4 pb-8">
-      {/* 1. Header & Bộ Điều Hướng Tuần */}
+      {/* 1. Header & Điều hướng tuần chuẩn Google Calendar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
         <div>
-          <Title level={4} style={{ margin: 0, fontWeight: 700, color: "#1e293b" }}>
-            Lịch Dạy Hàng Tuần
+          <Title level={4} style={{ margin: 0, fontWeight: 700, color: "#0f172a" }}>
+            Thời khóa biểu
           </Title>
-          <Text type="secondary" className="text-xs">
-            Thời khóa biểu giảng dạy và ca học kết nối Camera AI
-          </Text>
+          <div className="text-xs text-slate-500 mt-1 font-medium">{weekRangeText}</div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           <Button
-            icon={<LeftOutlined style={{ fontSize: 12 }} />}
+            icon={<LeftOutlined style={{ fontSize: 11 }} />}
             onClick={handlePrevWeek}
-            className="text-xs font-medium text-slate-600 rounded-lg hover:border-blue-500"
+            className="text-xs text-slate-600 rounded-lg hover:border-blue-500"
           >
             Tuần trước
-          </Button>
-
-          <div className="bg-sky-50 text-sky-700 font-semibold px-4 py-1.5 rounded-lg border border-sky-200 text-xs shadow-inner">
-            {weekRangeText}
-          </div>
-
-          <Button
-            onClick={handleNextWeek}
-            className="text-xs font-medium text-slate-600 rounded-lg hover:border-blue-500"
-          >
-            Sang tuần <RightOutlined style={{ fontSize: 12 }} />
           </Button>
 
           <Button
             type="primary"
             onClick={handleCurrentWeek}
-            style={{ background: "#0f172a", borderColor: "#0f172a" }}
-            className="text-xs font-semibold rounded-lg ml-1 shadow-sm"
+            style={{ background: "#2563eb", borderColor: "#2563eb", fontWeight: 600 }}
+            className="text-xs rounded-lg shadow-sm"
           >
             Hôm nay
+          </Button>
+
+          <Button
+            onClick={handleNextWeek}
+            className="text-xs text-slate-600 rounded-lg hover:border-blue-500"
+          >
+            Tuần sau <RightOutlined style={{ fontSize: 11 }} />
           </Button>
         </div>
       </div>
 
-      {/* 2. Lưới Thời Gian 7 Ngày (Time Grid Calendar) */}
+      {/* 2. Lưới Lịch Thời Gian Thực (Time Grid Calendar) */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
         <Spin spinning={isLoading}>
           <div className="min-w-[1050px]">
-            {/* Header các cột Ngày trong tuần */}
-            <div className="grid grid-cols-[80px_repeat(7,1fr)] border-b border-slate-200 bg-slate-50/70 text-center">
-              <div className="py-3 font-bold text-xs text-slate-400 border-r border-slate-200 flex items-center justify-center">
-                GIỜ
+            {/* Header các cột 7 ngày */}
+            <div className="grid grid-cols-[70px_repeat(7,1fr)] border-b border-slate-200 bg-white sticky top-0 z-20">
+              <div className="py-3 px-2 text-[11px] font-bold text-slate-400 border-r border-slate-200 flex flex-col items-center justify-center bg-slate-50/50">
+                <span>GMT+7</span>
               </div>
               {weekDays.map((day) => (
                 <div
                   key={day.dateStr}
-                  className={`py-3 px-2 border-r border-slate-200 last:border-r-0 transition-colors ${
-                    day.isToday ? "bg-sky-50/80 border-b-2 border-b-blue-600" : ""
+                  className={`py-3 px-2 border-r border-slate-200 last:border-r-0 text-center transition-colors ${
+                    day.isToday ? "bg-blue-50/40 relative" : ""
                   }`}
                 >
+                  {day.isToday && (
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-blue-600" />
+                  )}
                   <div
-                    className={`font-bold text-sm ${
-                      day.isToday ? "text-blue-600 font-extrabold" : "text-slate-700"
+                    className={`text-xs font-bold uppercase tracking-wider ${
+                      day.isToday ? "text-blue-600" : "text-slate-500"
                     }`}
                   >
                     {day.label}
                   </div>
                   <div
-                    className={`text-xs mt-0.5 ${
-                      day.isToday ? "text-blue-600 font-semibold" : "text-slate-400"
+                    className={`mt-1 inline-flex items-center justify-center w-8 h-8 rounded-full text-base font-extrabold ${
+                      day.isToday
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-800"
                     }`}
                   >
-                    {day.formattedDate} {day.isToday && <span className="text-[11px]">(Hôm nay)</span>}
+                    {day.dayNumber}
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Thân bảng lịch theo giờ (Time slots) */}
-            <div className="relative divide-y divide-slate-100">
-              {timeSlots.map((time) => (
-                <div
-                  key={time}
-                  className="grid grid-cols-[80px_repeat(7,1fr)] min-h-[90px]"
-                >
-                  {/* Cột Giờ bên trái */}
-                  <div className="p-2 border-r border-slate-200 text-xs font-mono text-slate-400 flex items-start justify-center bg-slate-50/30">
-                    {time}
+            {/* Thân bảng với các dòng giờ kẻ ngang và thẻ ca học tuyệt đối */}
+            <div
+              className="grid grid-cols-[70px_repeat(7,1fr)] relative"
+              style={{ height: `${totalGridHeight}px` }}
+            >
+              {/* Cột mốc giờ bên trái */}
+              <div className="border-r border-slate-200 bg-slate-50/30 relative">
+                {hoursArray.map((hour, idx) => (
+                  <div
+                    key={hour}
+                    style={{
+                      position: "absolute",
+                      top: `${idx * HOUR_HEIGHT}px`,
+                      left: 0,
+                      right: 0,
+                      height: `${HOUR_HEIGHT}px`,
+                    }}
+                    className="pr-2 pt-1 text-right text-[11px] font-mono text-slate-400"
+                  >
+                    {String(hour).padStart(2, "0")}:00
                   </div>
+                ))}
+              </div>
 
-                  {/* 7 Ô ngày trong tuần */}
-                  {weekDays.map((day) => {
-                    // Lọc các ca học bắt đầu trong khung giờ này
-                    const slotHour = parseInt(time.split(":")[0], 10);
-                    const matchedSessions = sessions.filter((s) => {
-                      if (s.sessionDate !== day.dateStr) return false;
-                      const sHour = parseInt(s.startTime.split(":")[0], 10);
-                      return sHour === slotHour;
-                    });
+              {/* 7 Cột Ngày - Chứa các đường kẻ ngang và các thẻ ca học */}
+              {weekDays.map((day) => {
+                const daySessions = sessions.filter((s) => s.sessionDate === day.dateStr);
 
-                    return (
+                return (
+                  <div
+                    key={day.dateStr}
+                    className={`border-r border-slate-200 last:border-r-0 relative transition-colors ${
+                      day.isToday ? "bg-blue-50/15" : ""
+                    }`}
+                    style={{ height: `${totalGridHeight}px` }}
+                  >
+                    {/* Các đường kẻ ngang mỗi 1 giờ */}
+                    {hoursArray.map((hour, idx) => (
                       <div
-                        key={`${day.dateStr}-${time}`}
-                        className={`p-1.5 border-r border-slate-100 last:border-r-0 relative transition-colors ${
-                          day.isToday ? "bg-sky-50/20" : "hover:bg-slate-50/60"
-                        }`}
-                      >
-                        {matchedSessions.map((session) => (
-                          <div key={session.id} className="mb-2">
-                            {/* Card Ca Học: 🟢 LIVE */}
-                            {session.liveStatus === "LIVE" && (
-                              <div
-                                className="rounded-xl p-3 border border-emerald-400 shadow-lg transition-all"
-                                style={{
-                                  background: "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)",
-                                  boxShadow: "0 4px 14px rgba(16, 185, 129, 0.25)",
-                                }}
-                              >
+                        key={hour}
+                        style={{
+                          position: "absolute",
+                          top: `${idx * HOUR_HEIGHT}px`,
+                          left: 0,
+                          right: 0,
+                          height: `${HOUR_HEIGHT}px`,
+                          borderTop: "1px solid #f1f5f9",
+                        }}
+                      />
+                    ))}
+
+                    {/* Render các thẻ ca học định vị tuyệt đối theo giờ thực tế */}
+                    {daySessions.map((session) => {
+                      const { top, height } = calculateSessionStyle(
+                        session.startTime,
+                        session.endTime
+                      );
+
+                      return (
+                        <div
+                          key={session.id}
+                          style={{
+                            position: "absolute",
+                            top,
+                            height,
+                            left: "4px",
+                            right: "4px",
+                            zIndex: session.liveStatus === "LIVE" ? 10 : 5,
+                          }}
+                        >
+                          {/* 🟢 CARD CA HỌC: LIVE */}
+                          {session.liveStatus === "LIVE" && (
+                            <div
+                              className="h-full rounded-xl p-3 flex flex-col justify-between border-2 border-emerald-500 shadow-lg transition-all"
+                              style={{
+                                background: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)",
+                                borderLeft: "5px solid #16a34a",
+                              }}
+                            >
+                              <div>
                                 <div className="flex items-center justify-between mb-1.5">
-                                  <span className="inline-flex items-center gap-1 bg-emerald-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full animate-pulse tracking-wide uppercase shadow-sm">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                                  <span className="inline-flex items-center gap-1 bg-emerald-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full animate-pulse uppercase">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-white" />
                                     ● ĐANG DIỄN RA
                                   </span>
                                   <Tag color="success" className="text-[10px] font-mono m-0 px-1 font-bold">
@@ -307,98 +356,107 @@ export function TeacherSchedule({
                                   </Tag>
                                 </div>
 
-                                <div className="font-bold text-slate-900 text-xs mb-1">
+                                <div className="font-bold text-slate-900 text-xs line-clamp-2 leading-tight">
                                   {session.courseName}
                                 </div>
 
-                                <div className="text-[11px] text-slate-600 mb-2 flex items-center gap-1 font-medium">
-                                  <span>Phòng: <b>{session.roomCode}</b></span>
-                                  <span>•</span>
-                                  <span>{session.totalStudents} SV</span>
+                                <div className="text-[11px] text-slate-600 mt-1">
+                                  {session.courseCode} • {session.roomCode}
                                 </div>
-
-                                <div className="flex items-center justify-between pt-1.5 border-t border-emerald-200/80 text-[11px]">
-                                  <span className="text-slate-500 font-mono">
-                                    {session.startTime} - {session.endTime}
-                                  </span>
-                                  <button
-                                    onClick={() => onStartScan(session.id)}
-                                    className="flex items-center gap-1 text-emerald-800 hover:text-emerald-950 font-bold bg-white/90 hover:bg-white px-2 py-0.5 rounded-md border border-emerald-300 shadow-sm transition-all text-[11px]"
-                                  >
-                                    Vào Ca Live <ArrowRightOutlined style={{ fontSize: 10 }} />
-                                  </button>
+                                <div className="text-[11px] text-slate-500 font-medium">
+                                  {session.totalStudents} SV • {session.startTime} - {session.endTime}
                                 </div>
                               </div>
-                            )}
 
-                            {/* Card Ca Học: 🟣 SẮP DIỄN RA */}
-                            {session.liveStatus === "UPCOMING" && (
-                              <div className="rounded-xl p-3 bg-white border border-slate-200 hover:border-indigo-300 shadow-sm transition-all">
-                                <div className="flex items-center justify-between mb-1.5">
-                                  <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-indigo-100">
+                              <button
+                                onClick={() => onStartScan(session.id)}
+                                className="w-full flex items-center justify-center gap-1 text-emerald-800 hover:text-emerald-950 font-bold bg-white hover:bg-emerald-50 py-1 rounded-md border border-emerald-300 shadow-sm transition-all text-xs mt-1"
+                              >
+                                Vào Ca Live <ArrowRightOutlined style={{ fontSize: 11 }} />
+                              </button>
+                            </div>
+                          )}
+
+                          {/* 🟣 CARD CA HỌC: SẮP DIỄN RA */}
+                          {session.liveStatus === "UPCOMING" && (
+                            <div
+                              className="h-full rounded-xl p-3 flex flex-col justify-between bg-white border border-slate-200 hover:border-indigo-300 shadow-sm transition-all"
+                              style={{ borderLeft: "4px solid #6366f1" }}
+                            >
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="inline-flex items-center gap-1 text-indigo-600 bg-indigo-50 text-[10px] font-bold px-2 py-0.5 rounded-full border border-indigo-100">
                                     ⏱ Sắp diễn ra
                                   </span>
                                 </div>
 
-                                <div className="font-bold text-slate-800 text-xs mb-1">
+                                <div className="font-bold text-slate-800 text-xs line-clamp-2 leading-tight">
                                   {session.courseName}
                                 </div>
 
-                                <div className="text-[11px] text-slate-500 mb-2 flex items-center gap-1">
-                                  <span>Phòng: <b>{session.roomCode}</b></span>
-                                  <span>•</span>
-                                  <span>{session.totalStudents} SV</span>
+                                <div className="text-[11px] text-slate-500 mt-1">
+                                  {session.courseCode} • {session.roomCode}
                                 </div>
-
-                                <div className="flex items-center justify-between pt-1.5 border-t border-slate-100 text-[11px] text-slate-400 font-mono">
-                                  <span>{session.startTime} - {session.endTime}</span>
-                                  <span className="text-[10px]">Chưa tới giờ</span>
+                                <div className="text-[11px] text-slate-400 font-mono">
+                                  {session.startTime} - {session.endTime}
                                 </div>
                               </div>
-                            )}
 
-                            {/* Card Ca Học: ⚪ ĐÃ KẾT THÚC */}
-                            {session.liveStatus === "COMPLETED" && (
-                              <div className="rounded-xl p-3 bg-slate-50 border border-slate-200/80 shadow-none transition-all">
-                                <div className="flex items-center justify-between mb-1.5">
-                                  <span className="inline-flex items-center gap-1 bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                    ✓ Đã kết thúc (Sĩ số: {session.summary.present}/{session.totalStudents})
-                                  </span>
-                                </div>
+                              <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px] text-slate-400 font-medium">
+                                <span className="flex items-center gap-1">
+                                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                                  Chưa tới giờ
+                                </span>
+                                <span>{session.totalStudents} SV</span>
+                              </div>
+                            </div>
+                          )}
 
-                                <div className="font-bold text-slate-700 text-xs mb-1">
+                          {/* ⚪ CARD CA HỌC: ĐÃ KẾT THÚC */}
+                          {session.liveStatus === "COMPLETED" && (
+                            <div
+                              className="h-full rounded-xl p-3 flex flex-col justify-between bg-white border border-slate-200/90 shadow-sm transition-all"
+                              style={{ borderLeft: "4px solid #2563eb" }}
+                            >
+                              <div>
+                                <div className="font-bold text-slate-800 text-xs line-clamp-2 leading-tight">
                                   {session.courseName}
                                 </div>
 
-                                <div className="text-[11px] text-slate-500 mb-2 flex items-center gap-1">
-                                  <span>Phòng: <b>{session.roomCode}</b></span>
-                                  <span>•</span>
-                                  <span>{session.totalStudents} SV</span>
+                                <div className="text-[11px] text-slate-500 mt-1">
+                                  {session.courseCode} • {session.roomCode}
                                 </div>
-
-                                <div className="flex items-center justify-between pt-1.5 border-t border-slate-200/60 text-[11px]">
-                                  <span className="text-slate-400 font-mono">
-                                    {session.startTime} - {session.endTime}
-                                  </span>
-                                  <span className="text-blue-600 font-medium text-[11px] cursor-pointer hover:underline">
-                                    Xem lại ảnh proof ➔
-                                  </span>
+                                <div className="text-[11px] text-slate-600 font-medium mt-0.5">
+                                  {session.startTime} - {session.endTime}
+                                </div>
+                                <div className="text-[11px] text-slate-400">
+                                  GV phụ trách
                                 </div>
                               </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
+
+                              <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]">
+                                <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold text-[10px]">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                  Đúng giờ
+                                </span>
+                                <span className="text-blue-600 font-semibold text-[10px] cursor-pointer hover:underline">
+                                  Xem proof ➔
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </Spin>
       </div>
 
-      {/* 3. Footer Trạng Thái Hệ Thống */}
+      {/* 3. Footer */}
       <div className="flex items-center justify-between text-xs text-slate-500 bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
         <div className="flex items-center gap-4">
           <span>

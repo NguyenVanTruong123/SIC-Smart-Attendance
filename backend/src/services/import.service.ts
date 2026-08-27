@@ -8,6 +8,62 @@ export interface ImportWarning {
   message: string;
 }
 
+/**
+ * Hàm chuẩn hóa và tìm kiếm giá trị từ object row theo nhiều biến thể tên cột (Case-insensitive & Trim)
+ */
+function getRowValue(row: any, ...keys: string[]): string {
+  if (!row || typeof row !== 'object') return '';
+  const rowKeys = Object.keys(row);
+
+  for (const targetKey of keys) {
+    const cleanTarget = targetKey.toLowerCase().replace(/[\s_-]/g, '');
+    for (const actualKey of rowKeys) {
+      const cleanActual = actualKey.toLowerCase().replace(/[\s_-]/g, '');
+      if (cleanActual === cleanTarget && row[actualKey] !== undefined && row[actualKey] !== null) {
+        return String(row[actualKey]).trim();
+      }
+    }
+  }
+  return '';
+}
+
+/**
+ * Hàm phân tích ngày linh hoạt hỗ trợ: ISO String, dd/mm/yyyy, yyyy-mm-dd, Excel serial number
+ */
+function parseFlexibleDate(dateRaw: any): Date {
+  if (!dateRaw) return new Date();
+
+  // 1. Nếu là đối tượng Date có sẵn
+  if (dateRaw instanceof Date && !isNaN(dateRaw.getTime())) {
+    return dateRaw;
+  }
+
+  // 2. Nếu là số Serial Number của Excel (ví dụ 45531)
+  if (typeof dateRaw === 'number') {
+    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+    return new Date(excelEpoch.getTime() + dateRaw * 86400000);
+  }
+
+  const str = String(dateRaw).trim();
+
+  // 3. Nếu là dạng dd/mm/yyyy hoặc dd-mm-yyyy (Chuẩn VN)
+  const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const month = parseInt(dmyMatch[2], 10) - 1;
+    const year = parseInt(dmyMatch[3], 10);
+    return new Date(year, month, day);
+  }
+
+  // 4. Nếu là dạng yyyy-mm-dd hoặc chuẩn ISO
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return parsed;
+  }
+
+  return new Date();
+}
+
 export class ImportService {
   /**
    * 1. Bóc tách danh sách Sinh viên từ Buffer File Excel
@@ -25,12 +81,12 @@ export class ImportService {
 
     rawData.forEach((row, index) => {
       const rowNum = index + 2; // Dòng 1 là tiêu đề
-      const userCode = String(row['MSSV'] || row['userCode'] || '').trim();
-      const fullName = String(row['Họ và tên'] || row['fullName'] || '').trim();
-      const email = String(row['Email'] || row['email'] || '').trim();
-      const className = String(row['Lớp'] || row['className'] || '').trim();
-      const department = String(row['Khoa'] || row['department'] || '').trim();
-      const phone = row['SĐT'] || row['phone'] ? String(row['SĐT'] || row['phone']).trim() : null;
+      const userCode = getRowValue(row, 'MSSV', 'userCode', 'Mã sinh viên', 'MaSV');
+      const fullName = getRowValue(row, 'Họ và tên', 'fullName', 'Tên', 'HoTen');
+      const email = getRowValue(row, 'Email', 'email', 'Thư điện tử');
+      const className = getRowValue(row, 'Lớp', 'className', 'Lop', 'Lớp sinh hoạt');
+      const department = getRowValue(row, 'Khoa', 'department', 'Khoa/Viện');
+      const phone = getRowValue(row, 'SĐT', 'phone', 'Số điện thoại') || null;
 
       if (!userCode || !email) {
         warnings.push({ row: rowNum, message: 'Thiếu MSSV hoặc Email bắt buộc.' });
@@ -38,7 +94,7 @@ export class ImportService {
       }
 
       if (seenCodes.has(userCode)) {
-        warnings.push({ row: rowNum, message: `Trùng lặp MSSV: ${userCode}.` });
+        warnings.push({ row: rowNum, message: `Trùng lặp MSSV trong file: ${userCode}.` });
         return;
       }
 
@@ -76,11 +132,11 @@ export class ImportService {
 
     rawData.forEach((row, index) => {
       const rowNum = index + 2;
-      const userCode = String(row['Mã GV'] || row['userCode'] || '').trim();
-      const fullName = String(row['Họ và tên'] || row['fullName'] || '').trim();
-      const email = String(row['Email'] || row['email'] || '').trim();
-      const department = String(row['Khoa'] || row['department'] || '').trim();
-      const phone = row['SĐT'] || row['phone'] ? String(row['SĐT'] || row['phone']).trim() : null;
+      const userCode = getRowValue(row, 'Mã GV', 'userCode', 'Mã giảng viên', 'MaGV');
+      const fullName = getRowValue(row, 'Họ và tên', 'fullName', 'Tên', 'HoTen');
+      const email = getRowValue(row, 'Email', 'email', 'Thư điện tử');
+      const department = getRowValue(row, 'Khoa', 'department', 'Khoa/Viện');
+      const phone = getRowValue(row, 'SĐT', 'phone', 'Số điện thoại') || null;
 
       if (!userCode || !email) {
         warnings.push({ row: rowNum, message: 'Thiếu Mã Giảng viên hoặc Email bắt buộc.' });
@@ -88,7 +144,7 @@ export class ImportService {
       }
 
       if (seenCodes.has(userCode)) {
-        warnings.push({ row: rowNum, message: `Trùng lặp Mã GV: ${userCode}.` });
+        warnings.push({ row: rowNum, message: `Trùng lặp Mã GV trong file: ${userCode}.` });
         return;
       }
 
@@ -123,19 +179,19 @@ export class ImportService {
 
     rawData.forEach((row, index) => {
       const rowNum = index + 2;
-      const courseCode = String(row['Mã Môn'] || row['courseCode'] || '').trim();
-      const courseName = String(row['Tên Môn'] || row['courseName'] || '').trim();
-      const credits = Number(row['Số Tín Chỉ'] || row['credits'] || 3);
-      const classCode = String(row['Mã Lớp HP'] || row['classCode'] || '').trim();
-      const semester = String(row['Học Kỳ'] || row['semester'] || 'HK1').trim();
-      const academicYear = String(row['Năm Học'] || row['academicYear'] || '2026-2027').trim();
-      const teacherCode = String(row['Mã GV'] || row['teacherCode'] || '').trim();
-      const roomCode = String(row['Phòng Học'] || row['roomCode'] || '').trim();
-      const startTimeStr = String(row['Giờ Bắt Đầu'] || row['startTime'] || '07:00').trim();
-      const endTimeStr = String(row['Giờ Kết Thúc'] || row['endTime'] || '09:30').trim();
-      const startDateRaw = row['Ngày Bắt Đầu'] || row['startDate'];
-      const totalSessions = Number(row['Tổng Số Buổi'] || row['totalSessions'] || 15);
-      const studentCodesRaw = String(row['Danh Sách MSSV'] || row['studentCodes'] || '').trim();
+      const courseCode = getRowValue(row, 'Mã Môn', 'courseCode', 'Mã học phần', 'MaMon');
+      const courseName = getRowValue(row, 'Tên Môn', 'courseName', 'Tên học phần', 'TenMon');
+      const credits = Number(getRowValue(row, 'Số Tín Chỉ', 'credits', 'TinChi') || 3);
+      const classCode = getRowValue(row, 'Mã Lớp HP', 'classCode', 'Mã lớp', 'MaLop');
+      const semester = getRowValue(row, 'Học Kỳ', 'semester', 'HocKy') || 'HK1';
+      const academicYear = getRowValue(row, 'Năm Học', 'academicYear', 'NamHoc') || '2026-2027';
+      const teacherCode = getRowValue(row, 'Mã GV', 'teacherCode', 'Mã giảng viên', 'MaGV');
+      const roomCode = getRowValue(row, 'Phòng Học', 'roomCode', 'Phòng', 'PhongHoc');
+      const startTimeStr = getRowValue(row, 'Giờ Bắt Đầu', 'startTime', 'GioBatDau') || '07:00';
+      const endTimeStr = getRowValue(row, 'Giờ Kết Thúc', 'endTime', 'GioKetThuc') || '09:30';
+      const startDateRaw = row['Ngày Bắt Đầu'] || row['startDate'] || row['NgayBatDau'] || row['Ngày bắt đầu'];
+      const totalSessions = Number(getRowValue(row, 'Tổng Số Buổi', 'totalSessions', 'SoBuoi') || 15);
+      const studentCodesRaw = getRowValue(row, 'Danh Sách MSSV', 'studentCodes', 'Danh sách MSSV', 'MSSV');
 
       if (!courseCode || !classCode || !teacherCode || !roomCode) {
         warnings.push({ row: rowNum, message: 'Thiếu Mã Môn, Mã Lớp HP, Mã GV hoặc Phòng học.' });
@@ -151,17 +207,10 @@ export class ImportService {
         });
       }
 
-      // Xử lý ngày bắt đầu
-      let startDate = new Date();
-      if (startDateRaw) {
-        const parsed = new Date(startDateRaw);
-        if (!isNaN(parsed.getTime())) {
-          startDate = parsed;
-        }
-      }
+      const startDate = parseFlexibleDate(startDateRaw);
 
       const studentCodes = studentCodesRaw
-        ? studentCodesRaw.split(',').map((s) => s.trim()).filter(Boolean)
+        ? studentCodesRaw.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean)
         : [];
 
       courseClasses.push({
@@ -176,6 +225,7 @@ export class ImportService {
         startDate,
         totalSessions,
         studentCodes,
+        rowNum,
       });
     });
 
@@ -183,7 +233,7 @@ export class ImportService {
   }
 
   /**
-   * 4. Thực thi Import trọn gói 3-trong-1 trong 1 Prisma Transaction
+   * 4. Thực thi Import trọn gói tối ưu hóa cao độ với Batch Queries & Phân loại Thêm mới / Cập nhật
    */
   async importBundle(files: {
     studentFile?: Buffer;
@@ -193,21 +243,42 @@ export class ImportService {
     const allWarnings: { [key: string]: ImportWarning[] } = {};
     const summary = {
       studentsImported: 0,
+      studentsCreated: 0,
+      studentsUpdated: 0,
       teachersImported: 0,
+      teachersCreated: 0,
+      teachersUpdated: 0,
       coursesImported: 0,
+      coursesCreated: 0,
+      coursesUpdated: 0,
       classesImported: 0,
+      classesCreated: 0,
+      classesUpdated: 0,
       enrollmentsCreated: 0,
       sessionsCreated: 0,
     };
 
     return await prisma.$transaction(
       async (tx) => {
-        // 1. Nạp Sinh viên
+        // 1. NẠP SINH VIÊN (Batch Check CSDL để phân loại Thêm mới / Cập nhật)
         if (files.studentFile) {
           const { validStudents, warnings } = await this.parseStudents(files.studentFile);
           allWarnings['students'] = warnings;
 
+          const studentCodes = validStudents.map((s) => s.userCode);
+          const existingStudents = await tx.user.findMany({
+            where: { userCode: { in: studentCodes } },
+            select: { userCode: true },
+          });
+          const existingSet = new Set(existingStudents.map((s) => s.userCode));
+
           for (const student of validStudents) {
+            if (existingSet.has(student.userCode)) {
+              summary.studentsUpdated++;
+            } else {
+              summary.studentsCreated++;
+            }
+
             await tx.user.upsert({
               where: { userCode: student.userCode },
               update: student,
@@ -217,12 +288,25 @@ export class ImportService {
           summary.studentsImported = validStudents.length;
         }
 
-        // 2. Nạp Giảng viên
+        // 2. NẠP GIẢNG VIÊN (Batch Check CSDL để phân loại Thêm mới / Cập nhật)
         if (files.teacherFile) {
           const { validTeachers, warnings } = await this.parseTeachers(files.teacherFile);
           allWarnings['teachers'] = warnings;
 
+          const teacherCodes = validTeachers.map((t) => t.userCode);
+          const existingTeachers = await tx.user.findMany({
+            where: { userCode: { in: teacherCodes } },
+            select: { userCode: true },
+          });
+          const existingSet = new Set(existingTeachers.map((t) => t.userCode));
+
           for (const teacher of validTeachers) {
+            if (existingSet.has(teacher.userCode)) {
+              summary.teachersUpdated++;
+            } else {
+              summary.teachersCreated++;
+            }
+
             await tx.user.upsert({
               where: { userCode: teacher.userCode },
               update: teacher,
@@ -232,14 +316,27 @@ export class ImportService {
           summary.teachersImported = validTeachers.length;
         }
 
-        // 3. Nạp Thời khóa biểu, Lớp HP và 15 Buổi học
+        // 3. NẠP THỜI KHÓA BIỂU, LỚP HỌC PHẦN VÀ 15 BUỔI HỌC
         if (files.scheduleFile) {
           const { courses, courseClasses, warnings } = await this.parseSchedule(files.scheduleFile);
           allWarnings['schedule'] = warnings;
 
-          // 3.1 Nạp Môn học
+          // 3.1 Nạp Môn học & Đếm Thêm mới / Cập nhật
+          const courseCodes = courses.map((c) => c.courseCode);
+          const existingCourses = await tx.course.findMany({
+            where: { courseCode: { in: courseCodes } },
+            select: { courseCode: true },
+          });
+          const existingCourseSet = new Set(existingCourses.map((c) => c.courseCode));
+
           const courseMap = new Map<string, string>();
           for (const course of courses) {
+            if (existingCourseSet.has(course.courseCode)) {
+              summary.coursesUpdated++;
+            } else {
+              summary.coursesCreated++;
+            }
+
             const savedCourse = await tx.course.upsert({
               where: { courseCode: course.courseCode },
               update: {
@@ -258,17 +355,60 @@ export class ImportService {
           }
           summary.coursesImported = courses.length;
 
-          // 3.2 Nạp Lớp học phần
-          for (const cClass of courseClasses) {
-            const teacher = await tx.user.findUnique({
-              where: { userCode: cClass.teacherCode },
-            });
+          // 3.2 Gom toàn bộ mã Giảng viên & MSSV để truy vấn 1 lần duy nhất (Batch Fetch)
+          const allTeacherCodes = Array.from(new Set(courseClasses.map((c) => c.teacherCode)));
+          const allStudentCodes = Array.from(
+            new Set(courseClasses.flatMap((c) => c.studentCodes))
+          );
+          const allRequiredUserCodes = Array.from(
+            new Set([...allTeacherCodes, ...allStudentCodes])
+          );
 
-            if (!teacher) {
+          const existingUsers = await tx.user.findMany({
+            where: { userCode: { in: allRequiredUserCodes } },
+            select: { id: true, userCode: true, role: true },
+          });
+
+          const userMap = new Map<string, { id: string; role: string }>();
+          existingUsers.forEach((u) => userMap.set(u.userCode, { id: u.id, role: u.role }));
+
+          // Gom toàn bộ phòng học để xử lý
+          const allRoomCodes = Array.from(new Set(courseClasses.map((c) => c.roomCode)));
+          const roomMap = new Map<string, string>();
+
+          for (const roomCode of allRoomCodes) {
+            const room = await tx.classroom.upsert({
+              where: { roomCode },
+              update: {},
+              create: {
+                roomCode,
+                building: roomCode.split('-')[0] || 'Tòa A',
+                floor: parseInt(roomCode.split('-')[1]?.[0] || '1', 10),
+                capacity: 60,
+                cameraIp: '192.168.1.100',
+                rtspUrl: `rtsp://192.168.1.100:554/live/${roomCode}`,
+              },
+            });
+            roomMap.set(roomCode, room.id);
+          }
+
+          // Phân loại Lớp học phần Thêm mới / Cập nhật
+          const classCodes = courseClasses.map((c) => c.classCode);
+          const existingClasses = await tx.courseClass.findMany({
+            where: { classCode: { in: classCodes } },
+            select: { classCode: true },
+          });
+          const existingClassSet = new Set(existingClasses.map((c) => c.classCode));
+
+          // 3.3 Nạp từng Lớp học phần
+          for (const cClass of courseClasses) {
+            const teacherInfo = userMap.get(cClass.teacherCode);
+
+            if (!teacherInfo) {
               allWarnings['schedule'] = allWarnings['schedule'] || [];
               allWarnings['schedule'].push({
-                row: 0,
-                message: `Không tìm thấy Giảng viên với mã: ${cClass.teacherCode}`,
+                row: cClass.rowNum,
+                message: `Không tìm thấy Giảng viên với mã: ${cClass.teacherCode} trong hệ thống.`,
               });
               continue;
             }
@@ -276,48 +416,50 @@ export class ImportService {
             const courseId = courseMap.get(cClass.courseCode);
             if (!courseId) continue;
 
-            // Tạo/Cập nhật phòng học nếu chưa có trong DB
-            const room = await tx.classroom.upsert({
-              where: { roomCode: cClass.roomCode },
-              update: {},
-              create: {
-                roomCode: cClass.roomCode,
-                building: cClass.roomCode.split('-')[0] || 'Tòa A',
-                floor: parseInt(cClass.roomCode.split('-')[1]?.[0] || '1', 10),
-                capacity: 60,
-                cameraIp: '192.168.1.100',
-                rtspUrl: `rtsp://192.168.1.100:554/live/${cClass.roomCode}`,
-              },
-            });
+            const roomId = roomMap.get(cClass.roomCode);
 
+            if (existingClassSet.has(cClass.classCode)) {
+              summary.classesUpdated++;
+            } else {
+              summary.classesCreated++;
+            }
+
+            // Upsert Lớp học phần
             const createdClass = await tx.courseClass.upsert({
               where: { classCode: cClass.classCode },
               update: {
                 courseId,
-                teacherId: teacher.id,
+                teacherId: teacherInfo.id,
                 semester: cClass.semester,
                 academicYear: cClass.academicYear,
               },
               create: {
                 classCode: cClass.classCode,
                 courseId,
-                teacherId: teacher.id,
+                teacherId: teacherInfo.id,
                 semester: cClass.semester,
                 academicYear: cClass.academicYear,
               },
             });
 
-            // 3.3 Gán sinh viên vào lớp học phần (Batching)
+            // 3.4 Gán sinh viên vào lớp học phần
             const enrollmentsData: any[] = [];
             for (const mssv of cClass.studentCodes) {
-              const student = await tx.user.findUnique({ where: { userCode: mssv } });
-              if (student) {
+              const studentInfo = userMap.get(mssv);
+              if (studentInfo) {
                 enrollmentsData.push({
                   courseClassId: createdClass.id,
-                  studentId: student.id,
+                  studentId: studentInfo.id,
+                });
+              } else {
+                allWarnings['schedule'] = allWarnings['schedule'] || [];
+                allWarnings['schedule'].push({
+                  row: cClass.rowNum,
+                  message: `MSSV ${mssv} chưa có trong hệ thống (bỏ qua ghi danh vào lớp ${cClass.classCode}).`,
                 });
               }
             }
+
             if (enrollmentsData.length > 0) {
               await tx.courseEnrollment.createMany({
                 data: enrollmentsData,
@@ -326,15 +468,35 @@ export class ImportService {
               summary.enrollmentsCreated += enrollmentsData.length;
             }
 
-            // 3.4 Tự động sinh 15 buổi học (15 tuần)
+            // 3.5 Tự động sinh 15 buổi học (15 tuần) - Dọn sạch an toàn không lỗi khóa ngoại
             const [startH, startM] = cClass.startTimeStr.split(':').map(Number);
             const [endH, endM] = cClass.endTimeStr.split(':').map(Number);
 
-            // Xóa ca học cũ của lớp này nếu có để nạp lại mới
-            await tx.classSession.deleteMany({
+            // Tìm các ca học cũ của lớp này
+            const oldSessions = await tx.classSession.findMany({
               where: { courseClassId: createdClass.id },
+              select: { id: true },
             });
+            const oldSessionIds = oldSessions.map((s) => s.id);
 
+            if (oldSessionIds.length > 0) {
+              // Dọn sạch các bảng con trước để tránh Foreign Key Constraint Violation
+              await tx.attendanceLog.deleteMany({
+                where: { sessionId: { in: oldSessionIds } },
+              });
+              await tx.sessionProofSnapshot.deleteMany({
+                where: { sessionId: { in: oldSessionIds } },
+              });
+              await tx.leaveRequest.deleteMany({
+                where: { sessionId: { in: oldSessionIds } },
+              });
+              // Xóa ca học cũ
+              await tx.classSession.deleteMany({
+                where: { id: { in: oldSessionIds } },
+              });
+            }
+
+            // Sinh dữ liệu các buổi học
             const sessionsData: any[] = [];
             for (let sessionNum = 1; sessionNum <= cClass.totalSessions; sessionNum++) {
               const sessionDate = new Date(cClass.startDate);
@@ -348,12 +510,12 @@ export class ImportService {
 
               sessionsData.push({
                 courseClassId: createdClass.id,
-                classroomId: room.id,
+                classroomId: roomId,
                 sessionNumber: sessionNum,
                 sessionDate,
                 startTime,
                 endTime,
-                topic: `Buổi ${sessionNum}: Giảng dạy theo đề cương`,
+                topic: `Buổi ${sessionNum}: Giảng dạy theo đề cương môn học`,
                 status: SessionStatus.SCHEDULED,
               });
             }
@@ -372,8 +534,8 @@ export class ImportService {
         return { summary, warnings: allWarnings };
       },
       {
-        maxWait: 10000,
-        timeout: 30000,
+        maxWait: 15000,
+        timeout: 60000,
       }
     );
   }

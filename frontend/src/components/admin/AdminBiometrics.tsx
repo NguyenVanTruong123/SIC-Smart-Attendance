@@ -61,9 +61,17 @@ interface ImportWarning {
 interface ImportResponse {
   summary: {
     studentsImported: number;
+    studentsCreated?: number;
+    studentsUpdated?: number;
     teachersImported: number;
+    teachersCreated?: number;
+    teachersUpdated?: number;
     coursesImported: number;
+    coursesCreated?: number;
+    coursesUpdated?: number;
     classesImported: number;
+    classesCreated?: number;
+    classesUpdated?: number;
     enrollmentsCreated: number;
     sessionsCreated: number;
   };
@@ -511,37 +519,66 @@ export function AdminBiometrics() {
           </div>
 
           {/* 2. Drag & Drop Khu vực kéo thả file */}
-          <Dragger
-            name="file"
-            multiple={false}
-            accept=".xlsx,.xls"
-            showUploadList={false}
-            beforeUpload={(file) => {
-              setSelectedFile(file);
-              setImportProgress(10);
-              setImportResult(null);
-              importExcel(file);
-              return false;
-            }}
-            style={{
-              background: "#fafcff",
-              borderColor: "#93c5fd",
-              borderStyle: "dashed",
-              borderRadius: 12,
-              padding: "24px 16px",
-            }}
-          >
-            <p className="ant-upload-drag-icon mb-2">
-              <InboxOutlined style={{ color: "#60a5fa", fontSize: 48 }} />
-            </p>
-            <p className="text-base font-bold text-slate-700 mb-1 font-mono">
-              cloud_upload
-            </p>
-            <p className="text-xs text-slate-500 font-medium">
-              Kéo thả file <span className="font-semibold text-blue-600">.xlsx</span> vào đây...
-            </p>
-            <p className="text-xs text-slate-400">hoặc click để chọn file từ máy tính</p>
-          </Dragger>
+          {!selectedFile ? (
+            <Dragger
+              name="file"
+              multiple={false}
+              accept=".xlsx,.xls"
+              showUploadList={false}
+              customRequest={({ file, onSuccess }) => {
+                const uploadFile = file as File;
+                setSelectedFile(uploadFile);
+                setImportProgress(20);
+                setImportResult(null);
+                importExcel(uploadFile);
+                if (onSuccess) onSuccess("ok");
+              }}
+              style={{
+                background: "#fafcff",
+                borderColor: "#93c5fd",
+                borderStyle: "dashed",
+                borderRadius: 12,
+                padding: "24px 16px",
+                cursor: "pointer",
+              }}
+            >
+              <p className="ant-upload-drag-icon mb-2">
+                <InboxOutlined style={{ color: "#60a5fa", fontSize: 48 }} />
+              </p>
+              <p className="text-base font-bold text-slate-700 mb-1 font-mono">
+                cloud_upload
+              </p>
+              <p className="text-xs text-slate-500 font-medium">
+                Kéo thả file <span className="font-semibold text-blue-600">.xlsx</span> vào đây...
+              </p>
+              <p className="text-xs text-slate-400">hoặc click để chọn file từ máy tính</p>
+            </Dragger>
+          ) : (
+            <div className="bg-sky-50/70 p-4 rounded-xl border border-sky-200 flex items-center justify-between shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center text-green-600 text-xl font-bold">
+                  <FileExcelOutlined />
+                </div>
+                <div>
+                  <div className="font-bold text-sm text-slate-800">{selectedFile.name}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    {(selectedFile.size / 1024).toFixed(1)} KB • {importing ? "Đang xử lý dữ liệu..." : "Đã nạp file thành công"}
+                  </div>
+                </div>
+              </div>
+              <Button
+                size="small"
+                disabled={importing}
+                onClick={() => {
+                  setSelectedFile(null);
+                  setImportProgress(0);
+                  setImportResult(null);
+                }}
+              >
+                Đổi file khác
+              </Button>
+            </div>
+          )}
 
           {/* 3. Tiến độ đang xử lý (Hiển thị khi đang import hoặc vừa import xong) */}
           {(importing || (selectedFile && importProgress > 0)) && (
@@ -582,10 +619,47 @@ export function AdminBiometrics() {
               <CheckCircleFilled style={{ color: "#16a34a", fontSize: 20, marginTop: 2 }} />
               <div>
                 <div className="font-bold text-sm text-green-900">
-                  Nạp thành công: {currentSuccessCount} {currentTargetLabel}
+                  {importTab === "SCHEDULE" ? (
+                    <>
+                      Nạp thành công: {importResult.summary.classesImported} Lớp học phần ({importResult.summary.sessionsCreated} Ca học)
+                    </>
+                  ) : (
+                    <>
+                      Nạp thành công: {currentSuccessCount} {currentTargetLabel}
+                    </>
+                  )}
                 </div>
-                <div className="text-xs text-green-700 mt-0.5">
-                  Dữ liệu hợp lệ đã được thêm vào hệ thống.
+                <div className="text-xs text-green-700 mt-1 flex items-center gap-2 flex-wrap">
+                  {importTab === "STUDENT" && (
+                    <>
+                      <span className="inline-flex items-center gap-1 font-semibold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded">
+                        🆕 {importResult.summary.studentsCreated || 0} thêm mới
+                      </span>
+                      <span className="inline-flex items-center gap-1 font-semibold text-blue-800 bg-blue-100/70 px-2 py-0.5 rounded">
+                        🔄 {importResult.summary.studentsUpdated || 0} đã có trong CSDL (cập nhật đè)
+                      </span>
+                    </>
+                  )}
+                  {importTab === "TEACHER" && (
+                    <>
+                      <span className="inline-flex items-center gap-1 font-semibold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded">
+                        🆕 {importResult.summary.teachersCreated || 0} thêm mới
+                      </span>
+                      <span className="inline-flex items-center gap-1 font-semibold text-blue-800 bg-blue-100/70 px-2 py-0.5 rounded">
+                        🔄 {importResult.summary.teachersUpdated || 0} đã có trong CSDL (cập nhật đè)
+                      </span>
+                    </>
+                  )}
+                  {importTab === "SCHEDULE" && (
+                    <>
+                      <span className="inline-flex items-center gap-1 font-semibold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded">
+                        🆕 {importResult.summary.classesCreated || 0} lớp mới
+                      </span>
+                      <span className="inline-flex items-center gap-1 font-semibold text-blue-800 bg-blue-100/70 px-2 py-0.5 rounded">
+                        🔄 {importResult.summary.classesUpdated || 0} lớp cập nhật lại lịch
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

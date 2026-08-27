@@ -87,7 +87,7 @@ export class TeacherService {
 
       if (session.status === SessionStatus.COMPLETED || (!isToday && sDate < now)) {
         liveStatus = 'COMPLETED';
-      } else if (session.status === SessionStatus.ACTIVE) {
+      } else if (session.status === SessionStatus.LIVE_NOW) {
         liveStatus = 'LIVE';
       } else if (isToday) {
         if (currentTimeMinutes >= startMinutesTotal && currentTimeMinutes <= endMinutesTotal) {
