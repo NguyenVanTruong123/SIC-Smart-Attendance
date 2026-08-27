@@ -34,6 +34,8 @@ import {
   WarningFilled,
   SyncOutlined,
   FileExcelOutlined,
+  CloudUploadOutlined,
+  CheckSquareFilled,
 } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/utils/api";
@@ -446,27 +448,29 @@ export function AdminBiometrics() {
         )}
       </Modal>
 
-      {/* ========================================================================= */}
-      {/* 🚀 MODAL 1.2.1: NẠP DỮ LIỆU HỆ THỐNG TỪ FILE EXCEL (KHỚP 100% MOCKUP) */}
-      {/* ========================================================================= */}
+      {/* Modal 1.2.1: Import Excel Master Bundle - 100% Giống Hình 2 */}
       <Modal
         title={
-          <div className="font-bold text-lg text-slate-800 pb-1">
+          <div className="text-base font-bold text-slate-800 pb-1">
             Nạp Dữ Liệu Hệ Thống từ File Excel
           </div>
         }
         open={importOpen}
         onCancel={handleCloseImportModal}
         footer={null}
-        width={600}
+        width={560}
         centered
-        bodyStyle={{ padding: "20px 24px" }}
+        styles={{
+          body: { padding: "16px 20px 20px 20px" },
+        }}
       >
-        <div className="space-y-4">
+        <div className="flex flex-col gap-3.5 pt-1">
           {/* 1. Chọn loại dữ liệu cần nạp */}
           <div>
-            <div className="text-xs font-semibold text-slate-500 mb-2">Loại dữ liệu cần nạp</div>
-            {/* Thanh Tab Segmented nằm ngang trên 1 hàng chuẩn mockup */}
+            <div className="text-xs text-slate-600 font-medium mb-1.5">
+              Loại dữ liệu cần nạp
+            </div>
+            {/* Thanh Tab Segmented nền xám chuẩn mockup */}
             <div
               style={{
                 display: "flex",
@@ -495,7 +499,7 @@ export function AdminBiometrics() {
                     style={{
                       flex: 1,
                       textAlign: "center",
-                      padding: "8px 12px",
+                      padding: "8px 10px",
                       fontSize: 13,
                       fontWeight: isActive ? 600 : 500,
                       color: isActive ? "#2563eb" : "#64748b",
@@ -503,8 +507,8 @@ export function AdminBiometrics() {
                       borderRadius: 6,
                       border: "none",
                       cursor: "pointer",
-                      boxShadow: isActive ? "0 1px 3px rgba(0, 0, 0, 0.1)" : "none",
-                      transition: "all 0.2s ease-in-out",
+                      boxShadow: isActive ? "0 1px 2px rgba(0, 0, 0, 0.06)" : "none",
+                      transition: "all 0.15s ease-in-out",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -513,85 +517,62 @@ export function AdminBiometrics() {
                 );
               })}
             </div>
-            <div className="text-slate-400 text-xs italic mt-2">
+            <div className="text-slate-400 text-xs italic mt-1.5">
               Lưu ý: Vui lòng sử dụng đúng file mẫu cho từng loại dữ liệu để tránh lỗi xử lý.
             </div>
           </div>
 
-          {/* 2. Drag & Drop Khu vực kéo thả file */}
-          {!selectedFile ? (
-            <Dragger
-              name="file"
-              multiple={false}
-              accept=".xlsx,.xls"
-              showUploadList={false}
-              customRequest={({ file, onSuccess }) => {
-                const uploadFile = file as File;
-                setSelectedFile(uploadFile);
-                setImportProgress(20);
-                setImportResult(null);
-                importExcel(uploadFile);
-                if (onSuccess) onSuccess("ok");
-              }}
+          {/* 2. Drag & Drop Khu vực kéo thả file (Luôn hiển thị chuẩn Hình 2) */}
+          <Dragger
+            name="file"
+            multiple={false}
+            accept=".xlsx,.xls"
+            showUploadList={false}
+            customRequest={({ file, onSuccess }) => {
+              const uploadFile = file as File;
+              setSelectedFile(uploadFile);
+              setImportProgress(20);
+              setImportResult(null);
+              importExcel(uploadFile);
+              if (onSuccess) onSuccess("ok");
+            }}
+            style={{
+              background: "#ffffff",
+              borderColor: "#cbd5e1",
+              borderStyle: "dashed",
+              borderWidth: "1.5px",
+              borderRadius: 10,
+              padding: "20px 16px",
+              cursor: "pointer",
+            }}
+          >
+            <div className="flex flex-col items-center justify-center py-1">
+              <CloudUploadOutlined style={{ color: "#94a3b8", fontSize: 44, marginBottom: 8 }} />
+              <div className="text-sm font-semibold text-slate-700 mb-0.5">
+                Kéo thả file <span className="font-semibold text-blue-600">.xlsx</span> vào đây...
+              </div>
+              <div className="text-xs text-slate-400">
+                hoặc click để chọn file từ máy tính
+              </div>
+            </div>
+          </Dragger>
+
+          {/* 3. Hộp tiến độ đang xử lý */}
+          {(importing || (selectedFile && importProgress > 0)) && (
+            <div
               style={{
-                background: "#fafcff",
-                borderColor: "#93c5fd",
-                borderStyle: "dashed",
-                borderRadius: 12,
-                padding: "24px 16px",
-                cursor: "pointer",
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: 8,
+                padding: "10px 14px",
               }}
             >
-              <p className="ant-upload-drag-icon mb-2">
-                <InboxOutlined style={{ color: "#60a5fa", fontSize: 48 }} />
-              </p>
-              <p className="text-base font-bold text-slate-700 mb-1 font-mono">
-                cloud_upload
-              </p>
-              <p className="text-xs text-slate-500 font-medium">
-                Kéo thả file <span className="font-semibold text-blue-600">.xlsx</span> vào đây...
-              </p>
-              <p className="text-xs text-slate-400">hoặc click để chọn file từ máy tính</p>
-            </Dragger>
-          ) : (
-            <div className="bg-sky-50/70 p-4 rounded-xl border border-sky-200 flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center text-green-600 text-xl font-bold">
-                  <FileExcelOutlined />
-                </div>
-                <div>
-                  <div className="font-bold text-sm text-slate-800">{selectedFile.name}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">
-                    {(selectedFile.size / 1024).toFixed(1)} KB • {importing ? "Đang xử lý dữ liệu..." : "Đã nạp file thành công"}
-                  </div>
-                </div>
-              </div>
-              <Button
-                size="small"
-                disabled={importing}
-                onClick={() => {
-                  setSelectedFile(null);
-                  setImportProgress(0);
-                  setImportResult(null);
-                }}
-              >
-                Đổi file khác
-              </Button>
-            </div>
-          )}
-
-          {/* 3. Tiến độ đang xử lý (Hiển thị khi đang import hoặc vừa import xong) */}
-          {(importing || (selectedFile && importProgress > 0)) && (
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
               <div className="flex items-center justify-between text-xs mb-1.5">
-                <div className="flex items-center gap-1.5 font-medium text-slate-700">
-                  <SyncOutlined spin={importing} className="text-blue-600" />
-                  <FileExcelOutlined className="text-green-600" />
-                  <span className="truncate max-w-[280px]">
-                    Đang xử lý: {selectedFile?.name || "file_du_lieu.xlsx"}
-                  </span>
+                <div className="flex items-center gap-2 text-slate-700 font-medium truncate max-w-[320px]">
+                  <SyncOutlined spin={importing} style={{ color: "#2563eb", fontSize: 13 }} />
+                  <span>Đang xử lý: {selectedFile?.name || "Danh_sach_du_lieu.xlsx"}</span>
                 </div>
-                <span className="font-bold text-blue-600 font-mono">
+                <span className="font-semibold text-blue-600 text-xs font-mono">
                   {importProgress === 100 ? "100%" : `${importProgress}%`}
                 </span>
               </div>
@@ -601,6 +582,7 @@ export function AdminBiometrics() {
                 strokeColor="#2563eb"
                 status={importing ? "active" : "normal"}
                 size="small"
+                style={{ marginBottom: 0 }}
               />
             </div>
           )}
@@ -610,56 +592,58 @@ export function AdminBiometrics() {
             <div
               style={{
                 background: "#f0fdf4",
-                border: "1px solid #86efac",
+                border: "1px solid #bbf7d0",
                 borderRadius: 8,
-                padding: "12px 16px",
+                padding: "12px 14px",
               }}
               className="flex items-start gap-3"
             >
-              <CheckCircleFilled style={{ color: "#16a34a", fontSize: 20, marginTop: 2 }} />
-              <div>
+              <CheckSquareFilled style={{ color: "#16a34a", fontSize: 22, marginTop: 1 }} />
+              <div className="space-y-1 w-full">
                 <div className="font-bold text-sm text-green-900">
                   {importTab === "SCHEDULE" ? (
-                    <>
-                      Nạp thành công: {importResult.summary.classesImported} Lớp học phần ({importResult.summary.sessionsCreated} Ca học)
-                    </>
+                    <>Nạp thành công: {importResult.summary.classesImported} Lớp học phần ({importResult.summary.sessionsCreated} Ca học)</>
                   ) : (
-                    <>
-                      Nạp thành công: {currentSuccessCount} {currentTargetLabel}
-                    </>
+                    <>Nạp thành công: {currentSuccessCount} {currentTargetLabel}</>
                   )}
                 </div>
-                <div className="text-xs text-green-700 mt-1 flex items-center gap-2 flex-wrap">
+
+                {/* Các chip phân loại Thêm mới & Cập nhật đè */}
+                <div className="flex items-center gap-2 flex-wrap text-xs pt-0.5">
                   {importTab === "STUDENT" && (
                     <>
-                      <span className="inline-flex items-center gap-1 font-semibold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded">
-                        🆕 {importResult.summary.studentsCreated || 0} thêm mới
+                      <span className="inline-flex items-center gap-1 font-semibold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded border border-emerald-200">
+                        🆕 {importResult.summary.studentsCreated || 0} Sinh viên mới
                       </span>
-                      <span className="inline-flex items-center gap-1 font-semibold text-blue-800 bg-blue-100/70 px-2 py-0.5 rounded">
-                        🔄 {importResult.summary.studentsUpdated || 0} đã có trong CSDL (cập nhật đè)
+                      <span className="inline-flex items-center gap-1 font-semibold text-blue-800 bg-blue-100/90 px-2 py-0.5 rounded border border-blue-200">
+                        🔄 {importResult.summary.studentsUpdated || 0} Sinh viên đã có trong hệ thống (cập nhật đè)
                       </span>
                     </>
                   )}
                   {importTab === "TEACHER" && (
                     <>
-                      <span className="inline-flex items-center gap-1 font-semibold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded">
-                        🆕 {importResult.summary.teachersCreated || 0} thêm mới
+                      <span className="inline-flex items-center gap-1 font-semibold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded border border-emerald-200">
+                        🆕 {importResult.summary.teachersCreated || 0} Giảng viên mới
                       </span>
-                      <span className="inline-flex items-center gap-1 font-semibold text-blue-800 bg-blue-100/70 px-2 py-0.5 rounded">
-                        🔄 {importResult.summary.teachersUpdated || 0} đã có trong CSDL (cập nhật đè)
+                      <span className="inline-flex items-center gap-1 font-semibold text-blue-800 bg-blue-100/90 px-2 py-0.5 rounded border border-blue-200">
+                        🔄 {importResult.summary.teachersUpdated || 0} Giảng viên đã có trong hệ thống (cập nhật đè)
                       </span>
                     </>
                   )}
                   {importTab === "SCHEDULE" && (
                     <>
-                      <span className="inline-flex items-center gap-1 font-semibold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded">
+                      <span className="inline-flex items-center gap-1 font-semibold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded border border-emerald-200">
                         🆕 {importResult.summary.classesCreated || 0} lớp mới
                       </span>
-                      <span className="inline-flex items-center gap-1 font-semibold text-blue-800 bg-blue-100/70 px-2 py-0.5 rounded">
+                      <span className="inline-flex items-center gap-1 font-semibold text-blue-800 bg-blue-100/90 px-2 py-0.5 rounded border border-blue-200">
                         🔄 {importResult.summary.classesUpdated || 0} lớp cập nhật lại lịch
                       </span>
                     </>
                   )}
+                </div>
+
+                <div className="text-xs text-green-700 mt-0.5">
+                  Dữ liệu hợp lệ đã được thêm vào hệ thống tạm.
                 </div>
               </div>
             </div>
@@ -669,22 +653,25 @@ export function AdminBiometrics() {
           {importResult && currentWarnings.length > 0 && (
             <div
               style={{
-                background: "#fffbeb",
-                border: "1px solid #fde68a",
+                background: "#fffbf5",
+                border: "1px solid #fed7aa",
                 borderRadius: 8,
-                padding: "12px 16px",
+                padding: "12px 14px",
               }}
               className="flex items-start gap-3"
             >
-              <WarningFilled style={{ color: "#f59e0b", fontSize: 20, marginTop: 2 }} />
+              <WarningFilled style={{ color: "#f97316", fontSize: 20, marginTop: 1 }} />
               <div className="w-full">
-                <div className="font-bold text-sm text-amber-900 mb-1">
+                <div className="font-bold text-sm text-amber-950 mb-1">
                   Cảnh báo lỗi {String(currentWarnings.length).padStart(2, "0")} dòng:
                 </div>
-                <ul className="text-xs text-amber-800 space-y-1 list-disc pl-4 max-h-32 overflow-y-auto">
+                <ul className="text-xs text-amber-900 space-y-1 pl-1 list-none max-h-28 overflow-y-auto">
                   {currentWarnings.map((w, idx) => (
-                    <li key={idx}>
-                      <span className="font-semibold">Dòng {w.row}:</span> {w.message}
+                    <li key={idx} className="flex items-start gap-1.5">
+                      <span className="text-amber-600 font-bold">•</span>
+                      <span>
+                        <b className="font-semibold">Dòng {w.row}:</b> {w.message}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -692,23 +679,24 @@ export function AdminBiometrics() {
             </div>
           )}
 
-          {/* 6. Footer Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-            <Button onClick={handleCloseImportModal} disabled={importing}>
+          {/* 6. Footer Buttons chuẩn Hình 2 */}
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 mt-1">
+            <button
+              type="button"
+              onClick={handleCloseImportModal}
+              disabled={importing}
+              className="px-4 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-all cursor-pointer shadow-2xs"
+            >
               Đóng / Hủy Bỏ
-            </Button>
-            <Button
-              type="primary"
+            </button>
+            <button
+              type="button"
               onClick={handleConfirmFinish}
               disabled={importing || !importResult}
-              style={{
-                background: importResult ? "#10b981" : undefined,
-                borderColor: importResult ? "#10b981" : undefined,
-                fontWeight: 600,
-              }}
+              className="px-4 py-2 text-xs font-semibold text-white bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-all cursor-pointer"
             >
               Xác Nhận Hoàn Tất
-            </Button>
+            </button>
           </div>
         </div>
       </Modal>
