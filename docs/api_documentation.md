@@ -914,4 +914,223 @@ Hệ thống sử dụng **JWT (JSON Web Token)** với cơ chế **Role-Based A
 | `attendance:leave_approved` | Server | Client | Cập nhật tức thì badge sinh viên sang `EXCUSED` khi GV duyệt đơn |
 
 ---
-*Tài liệu Đặc tả API v6.0 Final hoàn chỉnh 100%, chuẩn RESTful & WebSocket.*
+
+## 🤖 7. MODULE 6: PYTHON AI MICROSERVICE ENGINE (INTERNAL REST API)
+
+### 7.1. Tổng Quan Kiến Trúc & Mục Đích của AI Engine
+* **Công nghệ cốt lõi:**
+  * **Phát hiện khuôn mặt (Face Detection):** YOLO
+  * **Ước lượng góc mặt (Pose Estimation / Landmarks):** MTCNN
+  * **Trích xuất đặc trưng & Nhận diện (Recognition):** FaceNet (512D Embeddings)
+  * **Ngưỡng so khớp (Similarity Threshold):** $\ge 0.60$ (Cosine Similarity / Euclidean Distance)
+  * **Giao thức:** REST API (`multipart/form-data` và `application/json`), Base URL: `http://localhost:8000`
+* **Phạm vi nhiệm vụ:**
+  1. Kiểm tra góc mặt (Trước, Trái, Phải, Không rõ).
+  2. Kiểm tra trùng mặt (Tránh 1 khuôn mặt đăng ký cho nhiều MSSV).
+  3. Quản lý kho dữ liệu vector khuôn mặt (Thêm, Đọc xem trước, Xóa).
+  4. Nhận diện khuôn mặt từ ảnh chụp cả lớp (Batch Face Recognition).
+* **Quy ước ranh giới hệ thống:**
+  * AI Service không tự động điểm danh, không duy trì kết nối WebSocket, không tự động lưu dữ liệu vào CSDL PostgreSQL của ứng dụng Web.
+  * Backend Node.js đóng vai trò điều phối (gửi request sang AI Service, nhận kết quả và cập nhật CSDL).
+
+---
+
+### 7.2. Danh Sách Chi Tiết 7 API của Python AI Microservice
+
+#### 📍 7.2.1. Kiểm tra Trạng thái Dịch vụ AI (Health Check)
+* **Endpoint:** `GET /health` | **Auth:** Internal
+* **Mục đích:** Backend/Frontend gọi để kiểm tra xem Python AI Engine có đang sẵn sàng hoạt động trước khi mở Camera hoặc kích hoạt phiên quét.
+* **Success Response (200 OK):**
+```json
+{
+  "status": "ok",
+  "service": "spas-ai-engine",
+  "version": "1.0.0",
+  "gpu_available": true,
+  "models_loaded": {
+    "yolo": true,
+    "mtcnn": true,
+    "facenet": true
+  }
+}
+```
+
+---
+
+#### 📍 7.2.2. Kiểm tra Góc Mặt (Face Pose Estimation)
+* **Endpoint:** `POST /api/face-pose` | **Auth:** Internal
+* **Content-Type:** `multipart/form-data`
+* **Form Data:**
+  * `image`: File ảnh chân dung rời (`.jpg`, `.jpeg`, `.png`).
+* **Mục đích:** Backend/Frontend dùng để kiểm tra và lọc lấy các khung hình rõ nét, đúng góc độ (`front`, `left`, `right`) trong quy trình eKYC.
+* **Success Response (200 OK):**
+```json
+{
+  "success": true,
+  "pose": "front",
+  "confidence": 0.96,
+  "bbox": [120, 85, 280, 310]
+}
+```
+* **Các giá trị của `pose`:**
+  * `"front"`: Mặt nhìn thẳng trực diện.
+  * `"left"`: Mặt quay nghiêng sang trái.
+  * `"right"`: Mặt quay nghiêng sang phải.
+  * `"unknown"`: Không xác định được góc mặt / bị che khuất hoặc mờ.
+
+---
+
+#### 📍 7.2.3. Kiểm tra Trùng Khuôn Mặt (Check Duplicate Enrollment)
+* **Endpoint:** `POST /api/check-enrollment` | **Auth:** Internal
+* **Content-Type:** `multipart/form-data`
+* **Form Data:**
+  * `student_id`: Mã số sinh viên (`userCode`, ví dụ: `"21020001"`).
+  * `frames`: Danh sách tối thiểu 3 file ảnh chân dung đã lọc (`frame1.jpg`, `frame2.jpg`, `frame3.jpg`).
+* **Mục đích:** So sánh vector khuôn mặt mới với toàn bộ kho dữ liệu khuôn mặt đã đăng ký trước đó để chống gian lận (đăng ký hộ người khác).
+* **Success Response (200 OK):**
+```json
+{
+  "success": true,
+  "is_duplicate": false,
+  "matched_student_id": null,
+  "similarity_score": 0.24,
+  "message": "Khuôn mặt hợp lệ, chưa từng được đăng ký trong hệ thống."
+}
+```
+* **Trường hợp bị trùng (Duplicate):**
+```json
+{
+  "success": true,
+  "is_duplicate": true,
+  "matched_student_id": "21020099",
+  "similarity_score": 0.89,
+  "message": "Khuôn mặt này đã được đăng ký cho sinh viên có mã: 21020099."
+}
+```
+
+---
+
+#### 📍 7.2.4. Đăng Ký & Lưu Trữ Khuôn Mặt (Enroll Face)
+* **Endpoint:** `POST /api/enroll` | **Auth:** Internal
+* **Content-Type:** `multipart/form-data`
+* **Form Data:**
+  * `student_id`: Mã số sinh viên (`userCode`, ví dụ: `"21020001"`).
+  * `name`: Họ và tên sinh viên (ví dụ: `"Nguyễn Văn An"`).
+  * `frames`: Danh sách tối thiểu 3 file ảnh chân dung đạt chuẩn (`front`, `left`, `right`).
+* **Mục đích:** AI Engine trích xuất đặc trưng FaceNet 512D, lưu vector và ảnh khuôn mặt đại diện vào kho dữ liệu AI.
+* **Success Response (200 OK):**
+```json
+{
+  "success": true,
+  "student_id": "21020001",
+  "enrolled_frames_count": 3,
+  "face_crop_base64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...",
+  "message": "Đăng ký dữ liệu khuôn mặt sinh viên thành công."
+}
+```
+
+---
+
+#### 📍 7.2.5. Xem Ảnh Đã Đăng Ký (Get Enrollment Face Previews)
+* **Endpoint:** `GET /api/enrollment/{student_id}/previews` | **Auth:** Internal
+* **URL Params:** `student_id` (Mã số sinh viên, ví dụ: `21020001`).
+* **Mục đích:** Trả về các ảnh khuôn mặt (định dạng Base64) đã lưu trữ của sinh viên đó để phục vụ hiển thị xem trước hoặc đối soát.
+* **Success Response (200 OK):**
+```json
+{
+  "success": true,
+  "student_id": "21020001",
+  "total_images": 3,
+  "images": [
+    "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...",
+    "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...",
+    "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD..."
+  ]
+}
+```
+
+---
+
+#### 📍 7.2.6. Xóa Dữ Liệu Khuôn Mặt Sinh Viên (Delete Enrollment)
+* **Endpoint:** `DELETE /api/enrollment/{student_id}` | **Auth:** Internal (Chỉ Admin)
+* **URL Params:** `student_id` (Mã số sinh viên cần xóa).
+* **Mục đích:** Xóa toàn bộ vector đặc trưng và ảnh mẫu của sinh viên khỏi kho dữ liệu AI (khi Admin cấp quyền đăng ký lại eKYC hoặc sinh viên thôi học).
+* **Success Response (200 OK):**
+```json
+{
+  "success": true,
+  "student_id": "21020001",
+  "message": "Đã xóa toàn bộ dữ liệu khuôn mặt của sinh viên 21020001 khỏi AI Engine."
+}
+```
+
+---
+
+#### 📍 7.2.7. Nhận Diện Điểm Danh Cả Lớp (Classroom Batch Face Recognition)
+* **Endpoint:** `POST /api/recognize` | **Auth:** Internal
+* **Content-Type:** `multipart/form-data`
+* **Form Data:**
+  * `image`: 1 file ảnh chụp toàn cảnh phòng học / lớp học (`classroom_snapshot.jpg`).
+* **Mục đích:** YOLO quét tất cả khuôn mặt trong phòng học -> FaceNet trích xuất vector và so sánh với kho dữ liệu ($\text{score} \ge 0.60$) -> Trả về danh sách sinh viên có mặt và ảnh đã vẽ sẵn khung Bounding Box.
+* **Success Response (200 OK):**
+```json
+{
+  "success": true,
+  "total_faces": 42,
+  "recognized": [
+    {
+      "student_id": "21020001",
+      "name": "Nguyễn Văn An",
+      "score": 0.88,
+      "bbox": [140, 210, 210, 305]
+    },
+    {
+      "student_id": "21020002",
+      "name": "Trần Thị Bình",
+      "score": 0.79,
+      "bbox": [320, 190, 390, 280]
+    }
+  ],
+  "unknown_faces_count": 3,
+  "annotated_image": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD..."
+}
+```
+
+---
+
+### 7.3. Luồng Tương Tác Giữa Backend Node.js và Python AI Service
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Sinh Viên / Giảng Viên
+    participant Web as Frontend Web (React)
+    participant BE as Backend Gateway (Node.js)
+    participant AI as Python AI Engine (FastAPI)
+    participant DB as PostgreSQL Database
+
+    Note over User, AI: 1. LUỒNG ĐĂNG KÝ KHUÔN MẶT (eKYC ONBOARDING)
+    User->>Web: Thực hiện quay/chụp 3 góc mặt (Thẳng, Trái, Phải)
+    Web->>BE: Gửi danh sách ảnh chân dung
+    BE->>AI: POST /api/face-pose (Kiểm tra góc mặt từng ảnh)
+    AI-->>BE: Trả về kết quả: front, left, right
+    BE->>AI: POST /api/check-enrollment (Kiểm tra trùng mặt)
+    AI-->>BE: is_duplicate: false
+    BE->>AI: POST /api/enroll (Lưu vector & thông tin sinh viên)
+    AI-->>BE: Đăng ký thành công + Face Crop Base64
+    BE->>DB: Cập nhật is_face_enrolled = true & lưu avatar
+    BE-->>Web: Thông báo đăng ký eKYC hoàn tất
+
+    Note over User, AI: 2. LUỒNG ĐIỂM DANH TỰ ĐỘNG (CLASS ATTENDANCE)
+    User->>Web: Giảng viên kích hoạt quét / Chụp ảnh phòng học
+    Web->>BE: Gửi 1 ảnh chụp cả lớp (Snapshot)
+    BE->>AI: POST /api/recognize (Gửi ảnh cả lớp)
+    Note over AI: YOLO phát hiện mặt -> FaceNet so khớp vector (Score >= 0.60)
+    AI-->>BE: Trả về recognized_list & annotated_image
+    BE->>DB: Đối chiếu sĩ số lớp & Ghi nhận AttendanceLog (PRESENT)
+    BE-->>Web: Trả về kết quả sĩ số có mặt kèm ảnh đã vẽ khung
+```
+
+---
+*Tài liệu Đặc tả API v6.0 Final hoàn chỉnh 100%, chuẩn RESTful, WebSocket & Python AI Microservice.*
+

@@ -5,11 +5,16 @@ import { uploadExcel } from '../middlewares/upload.middleware';
 import { importController } from '../controllers/import.controller';
 import { biometricController } from '../controllers/biometric.controller'; 
 import { classroomController } from '../controllers/classroom.controller';
+import { adminClassController } from '../controllers/admin-class.controller';
+import { adminOverviewController } from '../controllers/admin-overview.controller';
 
 const router = Router();
 
 // Tất cả các route bên dưới bắt buộc phải có Token JWT và có quyền ADMIN
 router.use(verifyToken, authorizeRoles(UserRole.ADMIN));
+
+// 0. Endpoint Tổng quan Thông số Hệ thống SPAS (Dashboard)
+router.get('/overview', (req, res, next) => adminOverviewController.getOverview(req, res, next));
 
 // 1. Endpoint Lấy danh sách Sinh trắc học & 4 Thẻ KPI (Màn hình 1.2)
 router.get('/biometrics', (req, res, next) => biometricController.getBiometrics(req, res, next));
@@ -33,5 +38,8 @@ router.put('/classrooms/:id', (req, res, next) => classroomController.updateClas
 router.delete('/classrooms/:id', (req, res, next) => classroomController.deleteClassroom(req, res, next));
 router.post('/classrooms/ping-camera', (req, res, next) => classroomController.pingCamera(req, res, next));
 router.post('/classrooms/:id/ping-camera', (req, res, next) => classroomController.pingCamera(req, res, next));
+
+// 4. MODULE MÔN HỌC & LỚP HỌC PHẦN (TREE TABLE)
+router.get('/classes', (req, res, next) => adminClassController.getClasses(req, res, next));
 
 export default router;

@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
 import { UserRole, UserStatus } from '@prisma/client';
 import prisma from '../config/prisma';
-import { generateTokens } from '../utils/jwt';
+import { generateTokens, verifyRefreshToken } from '../utils/jwt';
 
 export class AuthService {
   /**
@@ -76,6 +76,40 @@ export class AuthService {
         isFaceEnrolled: user.isFaceEnrolled,
       },
       redirectUrl,
+    };
+  }
+
+  /**
+   * Tự động cấp lại Access Token mới từ Refresh Token hợp lệ
+   */
+  async refreshToken(refreshTokenString: string) {
+    if (!refreshTokenString) {
+      throw new Error('Vui lòng cung cấp Refresh Token.');
+    }
+
+    // 1. Giải mã và kiểm tra chữ ký của Refresh Token
+    const decoded = verifyRefreshToken(refreshTokenString);
+
+    // 2. Tìm người dùng trong cơ sở dữ liệu
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+    });
+
+    if (!user || user.status !== UserStatus.ACTIVE) {
+      throw new Error('Tài khoản không hợp lệ hoặc đã bị khóa.');
+    }
+
+    // 3. Tạo bộ đôi Token mới
+    const tokens = generateTokens({
+      userId: user.id,
+      userCode: user.userCode,
+      role: user.role,
+      isFaceEnrolled: user.isFaceEnrolled,
+    });
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
     };
   }
 }

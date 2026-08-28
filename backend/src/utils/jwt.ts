@@ -13,8 +13,8 @@ export interface JwtPayload {
 export const generateTokens = (payload: JwtPayload) => {
   const accessSecret = process.env.JWT_ACCESS_SECRET || 'spas_access_secret_2026';
   const refreshSecret = process.env.JWT_REFRESH_SECRET || 'spas_refresh_secret_2026';
-  const accessExpiresIn = process.env.JWT_ACCESS_EXPIRES_IN || '15m';
-  const refreshExpiresIn = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+  const accessExpiresIn = process.env.JWT_ACCESS_EXPIRES_IN || '7d';
+  const refreshExpiresIn = process.env.JWT_REFRESH_EXPIRES_IN || '30d';
 
   const accessToken = jwt.sign(payload, accessSecret, {
     expiresIn: accessExpiresIn as any,
