@@ -42,3 +42,13 @@ Chi tiết xem tại thư mục con của từng module:
 - [Backend Guide](./backend/README.md)
 - [AI Service Guide](./ai-service/README.md)
 - [Tài liệu đặc tả & CSDL](./docs/README.md)
+
+## 🚀 Chạy toàn bộ hệ thống bằng Docker Compose
+
+Đặt `face_best.pt` và `facenet_best.pt` vào thư mục `models/` (không commit model), sau đó chạy:
+
+```bash
+docker compose up --build
+```
+
+Mở `http://localhost`. Tài khoản seed và contract sáu nhóm chức năng xem tại [báo cáo triển khai](./docs/SIX_MODULES_IMPLEMENTATION_REPORT.md).

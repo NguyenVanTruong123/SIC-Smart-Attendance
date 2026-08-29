@@ -75,7 +75,6 @@ export class ClassroomService {
         { roomCode: { contains: search.trim(), mode: 'insensitive' } },
         { building: { contains: search.trim(), mode: 'insensitive' } },
         { cameraIp: { contains: search.trim(), mode: 'insensitive' } },
-        { rtspUrl: { contains: search.trim(), mode: 'insensitive' } },
       ];
     }
 
@@ -117,7 +116,6 @@ export class ClassroomService {
         roomType,
         deviceType,
         cameraIp: room.cameraIp,
-        rtspUrl: room.rtspUrl,
         cameraStatus: room.cameraStatus,
         latencyMs: isOnline ? 118 : null,
         fps: isOnline ? 30 : 0,
@@ -183,7 +181,8 @@ export class ClassroomService {
       },
     });
 
-    return newRoom;
+    const { rtspUrl: _rtspUrl, ...publicRoom } = newRoom;
+    return publicRoom;
   }
 
   /**
@@ -233,7 +232,8 @@ export class ClassroomService {
       },
     });
 
-    return updatedRoom;
+    const { rtspUrl: _rtspUrl, ...publicRoom } = updatedRoom;
+    return publicRoom;
   }
 
   /**
@@ -326,7 +326,6 @@ export class ClassroomService {
         resolution: '1920x1080',
         bitrateKbps: 4096,
         codec: 'DirectShow (H.264)',
-        targetUrl,
       };
     }
 
@@ -368,7 +367,6 @@ export class ClassroomService {
           resolution: '1920x1080',
           bitrateKbps: 4096,
           codec: targetUrl!.includes('265') ? 'H.265' : 'H.264',
-          targetUrl,
         });
       });
 
@@ -396,7 +394,6 @@ export class ClassroomService {
           resolution: '—',
           bitrateKbps: 0,
           codec: '—',
-          targetUrl,
         });
       });
 
@@ -424,7 +421,6 @@ export class ClassroomService {
           resolution: '—',
           bitrateKbps: 0,
           codec: '—',
-          targetUrl,
         });
       });
 
@@ -448,8 +444,10 @@ export class ClassroomService {
     }
 
     // Lấy các ca học gắn với phòng này
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const sessions = await prisma.classSession.findMany({
-      where: { classroomId: id },
+      where: { classroomId: id, sessionDate: today },
       include: {
         courseClass: {
           include: {
@@ -465,13 +463,13 @@ export class ClassroomService {
     });
 
     // Chuẩn hóa danh sách ca học cho Modal 1.1.1
-    const todaySchedule = sessions.map((session, index) => {
+    const todaySchedule = sessions.map((session) => {
       const start = new Date(session.startTime);
       const end = new Date(session.endTime);
       const startTimeStr = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
       const endTimeStr = `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
-      const totalStudents = session.courseClass._count?.enrollments || 45;
-      const attendedCount = session._count?.attendanceLogs || (index === 0 ? totalStudents - 1 : 0);
+      const totalStudents = session.courseClass._count?.enrollments || 0;
+      const attendedCount = session._count?.attendanceLogs || 0;
 
       return {
         sessionId: session.id,
@@ -480,7 +478,7 @@ export class ClassroomService {
         teacherName: session.courseClass.teacher?.fullName || 'Chưa phân công',
         startTime: startTimeStr,
         endTime: endTimeStr,
-        status: index === 0 ? 'LIVE' : 'UPCOMING',
+        status: session.status === 'LIVE_NOW' ? 'LIVE' : session.status === 'COMPLETED' ? 'COMPLETED' : 'UPCOMING',
         attendedCount,
         totalStudents,
       };
@@ -496,7 +494,6 @@ export class ClassroomService {
         floor: classroom.floor,
         capacity: classroom.capacity,
         cameraIp: classroom.cameraIp,
-        rtspUrl: classroom.rtspUrl,
         cameraStatus: classroom.cameraStatus,
         latencyMs: isOnline ? 118 : null,
         fps: isOnline ? 30 : 0,

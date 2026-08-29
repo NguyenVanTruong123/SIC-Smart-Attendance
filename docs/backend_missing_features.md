@@ -14,6 +14,22 @@
 
 ---
 
+## 🔄 HANDOFF FRONTEND / GATEWAY HIỆN TẠI
+
+Frontend TypeScript đã được refactor về giao diện portal đơn giản của bản Python và **không gọi trực tiếp Python AI từ trình duyệt**. Luồng bắt buộc là `Web → Node.js Gateway → Python AI → Database/Storage`.
+
+| Chức năng UI đã sẵn sàng | Gateway cần cung cấp | Trạng thái hiện tại |
+|---|---|---|
+| Đăng ký khuôn mặt sinh viên (video 3 giây, hướng dẫn thẳng/trái/phải) | `POST /api/v1/ekyc/enroll-initial` | **Chưa có route** |
+| Đồng bộ ảnh enrollment của sinh viên sau khi đăng ký | `GET /api/v1/auth/me` trả `avatarUrl` mới | Có route; cần Gateway cập nhật ảnh sau eKYC |
+| Danh sách sinh trắc học admin | `GET /api/v1/admin/biometrics` | Đã có route |
+| Xem ảnh/hồ sơ sinh trắc chi tiết admin | `GET /api/v1/admin/biometrics/:userId` | **Chưa có route** |
+| Điểm danh AI, evidence crop, unknown faces, sửa tay | Các route `/api/v1/teacher/sessions/*` và Socket.IO | **Chưa có route / Socket.IO** |
+
+**Lệch tài liệu cần chốt:** tài liệu API mô tả lịch dạy dùng `week`/`year`, nhưng backend hiện triển khai `startDate`/`endDate`. Frontend đang dùng `startDate`/`endDate` để chuyển tuần hoạt động đúng với backend; chỉ cần đồng bộ tài liệu hoặc thêm hỗ trợ `week`/`year`, không đổi cả hai tùy ý.
+
+---
+
 ## 🚨 1. DANH SÁCH CHỨC NĂNG BACKEND CÒN THIẾU (THEO TỪNG MODULE)
 
 ### 🔐 1.1. Module Xác thực (Authentication)

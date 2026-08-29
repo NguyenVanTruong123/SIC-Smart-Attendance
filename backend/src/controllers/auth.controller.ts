@@ -145,6 +145,10 @@ export class AuthController {
       });
     }
   }
+
+  async changePassword(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try { return res.json({ success: true, data: await authService.changePassword(req.user!.userId, req.body.currentPassword, req.body.newPassword) }); } catch (error) { next(error); }
+  }
 }
 
 export const authController = new AuthController();

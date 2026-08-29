@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Card, Table, Tag, Input, Select, Row, Col, Statistic, Progress, Button } from "antd";
+import { useDeferredValue, useState } from "react";
+import { Card, Table, Tag, Input, Select, Row, Col, Statistic, Progress, Button, Form, InputNumber, message } from "antd";
 import {
   SearchOutlined,
   BookOutlined,
@@ -11,7 +11,7 @@ import {
   DisconnectOutlined,
   SyncOutlined,
 } from "@ant-design/icons";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/utils/api";
 
 // =============================================================================
@@ -29,6 +29,16 @@ export interface CourseChildRow {
   teacherEmail?: string;
   totalStudents: number;
   schedule: string;
+  scheduleSlots?: Array<{
+    dayOfWeek: number;
+    dayName: string;
+    startTime: string;
+    endTime: string;
+    periodStart?: number | null;
+    periodEnd?: number | null;
+    periodLabel?: string | null;
+    roomCode: string;
+  }>;
   classroom: string;
   cameraStatus: "ONLINE" | "OFFLINE" | "MAINTENANCE";
   cameraFps: number;
@@ -63,6 +73,228 @@ export interface AdminClassesResponse {
   };
   semesters: string[];
   items: CourseParentRow[];
+}
+
+type CourseOption = { id: string; courseCode: string; courseName: string };
+type UserOption = { id: string; userCode: string; fullName: string };
+type CourseClassOption = { id: string; classCode: string; course: CourseOption };
+type PagedUsers = { items: UserOption[] };
+type ClassroomOption = { id: string; roomCode: string; building: string; floor: number; cameraStatus: string };
+type ClassroomListResponse = { items: ClassroomOption[] };
+
+const studyPeriodOptions = [
+  [1, "Ca 1 · 07:00–07:50"],
+  [2, "Ca 2 · 07:55–08:45"],
+  [3, "Ca 3 · 08:50–09:40"],
+  [4, "Ca 4 · 09:50–10:40"],
+  [5, "Ca 5 · 10:45–11:35"],
+  [6, "Ca 6 · 11:40–12:30"],
+  [7, "Ca 7 · 13:30–14:20"],
+  [8, "Ca 8 · 14:25–15:15"],
+  [9, "Ca 9 · 15:20–16:10"],
+  [10, "Ca 10 · 16:20–17:10"],
+  [11, "Ca 11 · 17:15–18:05"],
+  [12, "Ca 12 · 18:20–19:10"],
+  [13, "Ca 13 · 19:15–20:05"],
+].map(([value, label]) => ({ value, label: String(label) }));
+
+function normalizeSelectSearch(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("vi-VN");
+}
+
+function filterSelectOption(input: string, option?: { label?: unknown }) {
+  return normalizeSelectSearch(option?.label).includes(normalizeSelectSearch(input));
+}
+
+function AdminAcademicCreateCards() {
+  const [courseForm] = Form.useForm();
+  const [classForm] = Form.useForm();
+  const [enrollmentForm] = Form.useForm();
+  const queryClient = useQueryClient();
+  const [courseSearch, setCourseSearch] = useState("");
+  const [teacherSearch, setTeacherSearch] = useState("");
+  const [studentSearch, setStudentSearch] = useState("");
+  const [classSearch, setClassSearch] = useState("");
+  const [classroomSearch, setClassroomSearch] = useState("");
+  const deferredCourseSearch = useDeferredValue(courseSearch);
+  const deferredTeacherSearch = useDeferredValue(teacherSearch);
+  const deferredStudentSearch = useDeferredValue(studentSearch);
+  const deferredClassSearch = useDeferredValue(classSearch);
+  const coursesQuery = useQuery<CourseOption[]>({
+    queryKey: ["admin-courses-options", deferredCourseSearch],
+    queryFn: () => api.get(`/admin/courses?search=${encodeURIComponent(deferredCourseSearch)}`) as Promise<CourseOption[]>,
+  });
+  const teachersQuery = useQuery<PagedUsers>({
+    queryKey: ["admin-teacher-options", deferredTeacherSearch],
+    queryFn: () => api.get(`/admin/users?role=TEACHER&limit=100&search=${encodeURIComponent(deferredTeacherSearch)}`) as Promise<PagedUsers>,
+  });
+  const studentsQuery = useQuery<PagedUsers>({
+    queryKey: ["admin-student-options", deferredStudentSearch],
+    queryFn: () => api.get(`/admin/users?role=STUDENT&limit=100&search=${encodeURIComponent(deferredStudentSearch)}`) as Promise<PagedUsers>,
+  });
+  const classesQuery = useQuery<CourseClassOption[]>({
+    queryKey: ["admin-course-class-options", deferredClassSearch],
+    queryFn: () => api.get(`/admin/course-classes?search=${encodeURIComponent(deferredClassSearch)}`) as Promise<CourseClassOption[]>,
+  });
+  const classroomsQuery = useQuery<ClassroomListResponse>({
+    queryKey: ["admin-classroom-options"],
+    queryFn: () => api.get("/admin/classrooms?page=1&limit=100") as Promise<ClassroomListResponse>,
+  });
+
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ["admin-classes"] });
+    void queryClient.invalidateQueries({ queryKey: ["admin-courses-options"] });
+    void queryClient.invalidateQueries({ queryKey: ["admin-course-class-options"] });
+  };
+
+  const createCourse = useMutation({
+    mutationFn: (values: Record<string, unknown>) => api.post("/admin/courses", values),
+    onSuccess: () => {
+      message.success("Đã thêm môn học.");
+      courseForm.resetFields();
+      refresh();
+    },
+  });
+  const createClass = useMutation({
+    mutationFn: (values: Record<string, unknown>) => api.post("/admin/course-classes", values),
+    onSuccess: () => {
+      message.success("Đã tạo lớp học phần.");
+      classForm.resetFields();
+      refresh();
+    },
+  });
+  const enrollStudent = useMutation({
+    mutationFn: (values: { courseClassId: string; studentId: string }) => api.post(`/admin/course-classes/${values.courseClassId}/enrollments`, { studentId: values.studentId }),
+    onSuccess: () => {
+      message.success("Đã xếp sinh viên vào lớp.");
+      enrollmentForm.resetFields();
+      refresh();
+    },
+  });
+
+  const courseOptions = coursesQuery.data ?? [];
+  const teacherOptions = teachersQuery.data?.items ?? [];
+  const studentOptions = studentsQuery.data?.items ?? [];
+  const classOptions = classesQuery.data ?? [];
+  const classroomOptions = classroomsQuery.data?.items ?? [];
+
+  return (
+    <div className="admin-create-grid">
+      <Card title="Thêm môn học" className="admin-create-card">
+        <Form form={courseForm} layout="vertical" onFinish={(values) => createCourse.mutate(values)}>
+          <Form.Item name="courseCode" label="Mã môn" rules={[{ required: true, message: "Nhập mã môn." }]}>
+            <Input placeholder="VD: INT101" />
+          </Form.Item>
+          <Form.Item name="courseName" label="Tên môn" rules={[{ required: true, message: "Nhập tên môn." }]}>
+            <Input placeholder="VD: Nhập môn Trí tuệ nhân tạo" />
+          </Form.Item>
+          <Form.Item name="credits" label="Số tín chỉ" initialValue={3} rules={[{ required: true, message: "Nhập số tín chỉ." }]}>
+            <InputNumber min={1} max={10} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="totalSessions" label="Tổng số buổi" initialValue={15}>
+            <InputNumber min={1} max={60} style={{ width: "100%" }} />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" block loading={createCourse.isPending}>Thêm môn</Button>
+        </Form>
+      </Card>
+
+      <Card title="Tạo lớp học phần" className="admin-create-card">
+        <Form form={classForm} layout="vertical" onFinish={(values) => createClass.mutate(values)}>
+          <Form.Item name="courseId" label="Môn" rules={[{ required: true, message: "Chọn môn học." }]}>
+            <Select
+              showSearch
+              onSearch={setCourseSearch}
+              onChange={() => setCourseSearch("")}
+              placeholder="Tìm theo mã hoặc tên môn"
+              optionFilterProp="label"
+              filterOption={filterSelectOption}
+              options={courseOptions.map((course) => ({ value: course.id, label: `${course.courseCode} · ${course.courseName}` }))}
+            />
+          </Form.Item>
+          <Form.Item name="teacherId" label="Giảng viên" rules={[{ required: true, message: "Chọn giảng viên." }]}>
+            <Select
+              showSearch
+              onSearch={setTeacherSearch}
+              onChange={() => setTeacherSearch("")}
+              placeholder="Tìm theo mã hoặc tên giảng viên"
+              optionFilterProp="label"
+              filterOption={filterSelectOption}
+              options={teacherOptions.map((teacher) => ({ value: teacher.id, label: `${teacher.userCode} · ${teacher.fullName}` }))}
+            />
+          </Form.Item>
+          <Form.Item name="classCode" label="Mã lớp học phần" rules={[{ required: true, message: "Nhập mã lớp." }]}>
+            <Input placeholder="VD: INT101-01" />
+          </Form.Item>
+          <div className="admin-create-inline-fields">
+            <Form.Item name="semester" label="Học kỳ" rules={[{ required: true, message: "Nhập học kỳ." }]}>
+              <Input placeholder="HK1" />
+            </Form.Item>
+            <Form.Item name="academicYear" label="Năm học" rules={[{ required: true, message: "Nhập năm học." }]}>
+              <Input placeholder="2026-2027" />
+            </Form.Item>
+          </div>
+          <div className="admin-create-section-title">Lịch buổi đầu</div>
+          <div className="admin-create-inline-fields">
+            <Form.Item name="classroomId" label="Phòng học" rules={[{ required: true, message: "Chọn phòng học." }]}>
+              <Select
+                showSearch
+                onSearch={setClassroomSearch}
+                onChange={() => setClassroomSearch("")}
+                placeholder="Tìm theo mã phòng hoặc tòa nhà"
+                optionFilterProp="label"
+                filterOption={filterSelectOption}
+                options={classroomOptions.map((classroom) => ({ value: classroom.id, label: `${classroom.roomCode} · ${classroom.building} · Tầng ${classroom.floor}` }))}
+                notFoundContent={classroomSearch ? "Không tìm thấy phòng học" : "Chưa có phòng học"}
+              />
+            </Form.Item>
+            <Form.Item name="sessionDate" label="Ngày học" rules={[{ required: true, message: "Chọn ngày học." }]}>
+              <Input type="date" />
+            </Form.Item>
+          </div>
+          <div className="admin-create-inline-fields">
+            <Form.Item name="periodStart" label="Từ ca" rules={[{ required: true, message: "Chọn ca bắt đầu." }]}>
+              <Select showSearch optionFilterProp="label" filterOption={filterSelectOption} options={studyPeriodOptions} placeholder="Chọn ca bắt đầu" />
+            </Form.Item>
+            <Form.Item name="periodEnd" label="Đến ca" rules={[{ required: true, message: "Chọn ca kết thúc." }]}>
+              <Select showSearch optionFilterProp="label" filterOption={filterSelectOption} options={studyPeriodOptions} placeholder="Chọn ca kết thúc" />
+            </Form.Item>
+          </div>
+          <Button type="primary" htmlType="submit" block loading={createClass.isPending}>Tạo lớp học phần</Button>
+        </Form>
+      </Card>
+
+      <Card title="Xếp sinh viên" className="admin-create-card">
+        <Form form={enrollmentForm} layout="vertical" onFinish={(values) => enrollStudent.mutate(values)}>
+          <Form.Item name="courseClassId" label="Lớp học phần" rules={[{ required: true, message: "Chọn lớp học phần." }]}>
+            <Select
+              showSearch
+              onSearch={setClassSearch}
+              onChange={() => setClassSearch("")}
+              placeholder="Tìm theo mã lớp hoặc môn"
+              optionFilterProp="label"
+              filterOption={filterSelectOption}
+              options={classOptions.map((courseClass) => ({ value: courseClass.id, label: `${courseClass.classCode} · ${courseClass.course.courseCode} - ${courseClass.course.courseName}` }))}
+            />
+          </Form.Item>
+          <Form.Item name="studentId" label="Sinh viên" rules={[{ required: true, message: "Chọn sinh viên." }]}>
+            <Select
+              showSearch
+              onSearch={setStudentSearch}
+              onChange={() => setStudentSearch("")}
+              placeholder="Tìm theo mã hoặc tên sinh viên"
+              optionFilterProp="label"
+              filterOption={filterSelectOption}
+              options={studentOptions.map((student) => ({ value: student.id, label: `${student.userCode} · ${student.fullName}` }))}
+            />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" block loading={enrollStudent.isPending}>Thêm vào lớp</Button>
+        </Form>
+      </Card>
+    </div>
+  );
 }
 
 export function AdminClasses() {
@@ -350,6 +582,7 @@ export function AdminClasses() {
 
   return (
     <div className="space-y-4">
+      <AdminAcademicCreateCards />
       {/* 4 Thẻ KPI Real-time */}
       {kpis && (
         <Row gutter={[12, 12]}>

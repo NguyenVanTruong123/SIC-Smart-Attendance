@@ -1,5 +1,6 @@
 import prisma from '../config/prisma';
 import { SessionStatus } from '@prisma/client';
+import { periodLabel } from '../utils/study-periods';
 
 export interface TeacherScheduleFilter {
   teacherId: string;
@@ -124,6 +125,9 @@ export class TeacherService {
         dayOfWeek: sDate.getDay() === 0 ? 8 : sDate.getDay() + 1, // 2: Thứ 2 ... 8: Chủ nhật
         startTime: startTimeStr,
         endTime: endTimeStr,
+        periodStart: session.periodStart,
+        periodEnd: session.periodEnd,
+        periodLabel: periodLabel(session.periodStart, session.periodEnd),
         startMinutes: startMinutesTotal,
         endMinutes: endMinutesTotal,
         durationMinutes: endMinutesTotal - startMinutesTotal,
@@ -136,7 +140,6 @@ export class TeacherService {
         roomCode: session.classroom?.roomCode || 'P.---',
         building: session.classroom?.building || '',
         cameraStatus: session.classroom?.cameraStatus || 'OFFLINE',
-        cameraRtsp: session.classroom?.rtspUrl,
         liveStatus,
         summary: {
           total: totalStudents,

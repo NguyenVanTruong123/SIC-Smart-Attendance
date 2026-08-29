@@ -854,6 +854,45 @@ Hệ thống sử dụng **JWT (JSON Web Token)** với cơ chế **Role-Based A
 
 ---
 
+### 5.1.1. Hồ sơ định danh sau khi đăng ký khuôn mặt (`/student/biometric-profile`)
+* **Endpoint:** `GET /api/v1/student/biometric-profile` | **Auth:** `STUDENT`
+* **Mục đích:** Hiển thị lại trạng thái và metadata enrollment ngay trong trang Đăng ký khuôn mặt sau khi hoàn tất. Endpoint không nhận `user_id`; Backend lấy sinh viên từ JWT để ngăn đọc chéo tài khoản.
+* **Response không chứa:** embedding thô, đường dẫn filesystem/storage nội bộ hoặc dữ liệu sinh trắc của sinh viên khác.
+* **Success Response (200 OK):**
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "data": {
+    "student": {
+      "id": "usr_stu_01",
+      "userCode": "2102001",
+      "fullName": "Nguyễn Văn An",
+      "email": "an@example.edu.vn",
+      "department": "Khoa Công nghệ Thông tin",
+      "className": "21CNTT1"
+    },
+    "status": "ENROLLED",
+    "biometric": {
+      "vectorId": "#V-12",
+      "modelVersion": "facenet-512d",
+      "embeddingDimension": 512,
+      "enrollmentVersion": 1,
+      "enrolledAt": "2026-08-29T08:00:00.000Z"
+    },
+    "previewUrl": "/api/v1/student/face-preview"
+  }
+}
+```
+
+### 5.1.2. Xem ảnh enrollment sau khi đăng ký (`/student/face-preview`)
+* **Endpoint:** `GET /api/v1/student/face-preview` | **Auth:** `STUDENT`
+* **Mục đích:** Trả ảnh enrollment đã crop để sinh viên tự đối chiếu.
+* **Response:** `image/jpeg` binary. Frontend phải gọi bằng Axios/Bearer token, không dùng thẻ `<img>` trực tiếp với URL protected.
+* **Phân quyền:** Chỉ trả ảnh của `req.user.userId`; chưa có ảnh trả `404`.
+
+---
+
 ### 5.2. Nộp Đơn Xin Nghỉ & Quy Trình 3 Bước Re-eKYC
 
 #### 📍 5.2.1. Nộp đơn xin nghỉ học / Đi muộn (`/student/leave-requests`)

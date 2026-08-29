@@ -1,197 +1,663 @@
-/* =============================================================================
-   SPAS v6.0 — TailwindCSS v4 + Ant Design + Custom Design Tokens
-   ============================================================================= */
-
 @import "tailwindcss";
 
-/* --- SPAS Design Tokens (matches source tokens.css) --- */
-@theme {
-  --color-primary: #2563eb;
-  --color-primary-hover: #1d4ed8;
-  --color-primary-light: #eff6ff;
-  --color-primary-border: #bfdbfe;
-  --color-secondary: #0284c7;
-  --color-secondary-light: #f0f9ff;
+:root { font-family: Inter, "Segoe UI", Arial, sans-serif; color: #1f2937; background: #f8fafc; font-synthesis: none; }
+* { box-sizing: border-box; }
+body { min-width: 320px; min-height: 100vh; margin: 0; background: #f8fafc; }
+button, input, select, textarea { font: inherit; }
 
-  --color-canvas: #f8fafc;
-  --color-surface: #ffffff;
-  --color-sidebar: #f1f5f9;
-  --color-border: #e2e8f0;
-  --color-border-subtle: #f1f5f9;
+.portal-shell { display: grid; grid-template-columns: 260px minmax(0, 1fr); min-height: 100vh; }
+.portal-shell.is-collapsed { grid-template-columns: 72px minmax(0, 1fr); }
+.portal-sidebar { display: flex; flex-direction: column; min-width: 0; background: #fff; border-right: 1px solid #dbe1e8; }
+.portal-user-brief { display: flex; align-items: center; gap: 11px; padding: 18px 24px; border-bottom: 1px solid #dbe1e8; }
+.portal-avatar { display: grid; flex: 0 0 36px; width: 36px; height: 36px; place-items: center; border-radius: 50%; background: #e5e7eb; color: #374151; font-weight: 800; }
+.portal-user-brief strong, .portal-user-brief small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.portal-user-brief small, .portal-sidebar-footer { color: #6b7280; font-size: 12px; }
+.portal-navigation { display: grid; gap: 2px; padding: 18px 12px; }
+.portal-nav-title { padding: 0 12px 8px; color: #6b7280; font-size: 11px; font-weight: 800; }
+.portal-nav-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 42px; padding: 10px 12px; border: 0; border-radius: 4px; background: transparent; color: #4b5563; cursor: pointer; text-align: left; }
+.portal-nav-item:hover, .portal-nav-item:focus-visible, .portal-nav-item.is-active { background: #fff1f1; color: #a10000; outline: none; }
+.portal-nav-item.is-active { font-weight: 700; }
+.portal-nav-item:focus-visible { box-shadow: inset 0 0 0 2px #a10000; }
+.portal-nav-icon { display: grid; width: 16px; place-items: center; color: #9ca3af; }
+.portal-nav-item:hover .portal-nav-icon, .portal-nav-item.is-active .portal-nav-icon { color: #a10000; }
+.portal-shell.is-collapsed .portal-navigation { padding-inline: 12px; }
+.portal-shell.is-collapsed .portal-nav-item { justify-content: center; padding-inline: 0; }
+.portal-sidebar-footer { margin: auto 0 0; padding: 16px 24px; border-top: 1px solid #dbe1e8; }
+.portal-app { min-width: 0; }
+.portal-header { position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; min-height: 60px; padding: 0 24px; background: #a10000; color: #fff; box-shadow: 0 1px 0 rgba(0, 0, 0, .08); }
+.portal-title { text-align: center; font-size: 16px; letter-spacing: .02em; }
+.portal-collapse-button, .portal-header-avatar { display: grid; width: 36px; height: 36px; place-items: center; border: 0; border-radius: 50%; background: transparent; color: #fff; cursor: pointer; }
+.portal-collapse-button:hover, .portal-collapse-button:focus-visible { background: rgba(255,255,255,.16); outline: 2px solid #fff; outline-offset: 2px; }
+.portal-header-avatar { background: #fff; color: #4b5563; }
+.portal-header-avatar:hover, .portal-header-avatar:focus-visible { background: #f3f4f6; outline: 2px solid #fff; outline-offset: 2px; }
+.portal-content { width: min(1440px, 100%); margin: 0 auto; padding: 28px 30px; }
 
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #475569;
-  --color-text-muted: #64748b;
+.ant-layout, .ant-layout-content { background: transparent !important; }
+.ant-card, .ant-table-wrapper .ant-table, .ant-alert { border-radius: 4px !important; }
+.ant-card { border-color: #dbe1e8 !important; box-shadow: none !important; }
+.ant-card:hover { box-shadow: 0 3px 10px rgba(31,41,55,.06) !important; }
+.ant-btn-primary { background: #a10000 !important; box-shadow: none !important; }
+.ant-btn-primary:hover { background: #7f0000 !important; }
+.portal-content .text-blue-500,
+.portal-content .text-blue-600,
+.portal-content .text-indigo-600 { color: #a10000 !important; }
+.portal-content .bg-blue-50,
+.portal-content .bg-blue-50\/40,
+.portal-content .bg-blue-50\/15,
+.portal-content .bg-indigo-50 { background-color: #fff1f1 !important; }
+.portal-content .border-blue-300,
+.portal-content .border-blue-500,
+.portal-content .border-indigo-300 { border-color: #dca3a3 !important; }
+.ant-input, .ant-select-selector { border-radius: 4px !important; }
+.ant-table-thead > tr > th { background: #f8fafc !important; color: #4b5563 !important; font-size: 12px; text-transform: uppercase; }
 
-  --color-status-present: #10b981;
-  --color-status-present-bg: #ecfdf5;
-  --color-status-late: #d97706;
-  --color-status-late-bg: #fffbeb;
-  --color-status-absent: #dc2626;
-  --color-status-absent-bg: #fef2f2;
-  --color-status-truant: #ea580c;
-  --color-status-truant-bg: #fff7ed;
-  --color-status-excused: #0284c7;
-  --color-status-excused-bg: #f0f9ff;
+.login-page { display: grid; min-height: 100vh; place-items: center; padding: 24px; background: #f8fafc; }
+.login-card { width: min(420px, 100%); padding: 36px; border: 1px solid #dbe1e8; border-radius: 4px; background: #fff; box-shadow: 0 12px 30px rgba(31,41,55,.1); }
+
+.login-heading {
+  margin-bottom: 28px;
 }
 
-/* --- Global Reset & Base --- */
-*,
-*::before,
-*::after {
+.login-kicker {
+  display: block;
+  color: var(--portal-red);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.login-heading .ant-typography {
+  margin-bottom: 4px;
+}
+
+.login-error {
+  margin-top: 16px;
+}
+
+.page-heading,
+.enrollment-layout,
+.enrollment-actions {
+  display: flex;
+}
+
+.page-heading {
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.page-heading h1,
+.page-heading p,
+.enrollment-instructions h2 {
+  margin: 0;
+}
+
+.page-heading h1 {
+  font-size: 24px;
+}
+
+.page-heading p {
+  color: #637083;
+  margin-top: 5px;
+}
+
+.enrollment-layout {
+  align-items: stretch;
+  gap: 24px;
+}
+
+.camera-panel {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #17202d;
+  border-radius: 4px;
+  overflow: hidden;
+  width: min(100%, 680px);
+}
+
+.camera-preview,
+.camera-placeholder,
+.face-guide {
+  height: 100%;
+  width: 100%;
+}
+
+.camera-preview {
+  display: block;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.camera-placeholder {
+  align-items: center;
+  color: #d6dce5;
+  display: flex;
+  justify-content: center;
+}
+
+.face-guide {
+  align-items: center;
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  pointer-events: none;
+  position: absolute;
+}
+
+.face-guide-oval {
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  height: 62%;
+  width: 34%;
+}
+
+.recording-badge {
+  background: rgba(161, 0, 0, 0.92);
+  border-radius: 3px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 10px;
+  position: absolute;
+  right: 12px;
+  top: 12px;
+}
+
+.enrollment-instructions {
+  flex: 1;
+  min-width: 260px;
+}
+
+.enrollment-instructions h2 {
+  font-size: 18px;
+  margin-bottom: 14px;
+}
+
+.pose-list {
+  display: grid;
+  gap: 10px;
+  list-style: none;
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
 }
 
-html {
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 14px;
-  color: var(--color-text-primary);
-  background: var(--color-canvas);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-body {
-  min-height: 100vh;
-  line-height: 1.6;
-}
-
-/* --- Sidebar Brand & User Card --- */
-.sidebar-brand-wrapper {
-  padding: 24px 20px 16px 20px !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 12px !important;
-}
-
-.sidebar-user-card {
-  margin: 0 16px 16px 16px !important;
-  padding: 10px 12px !important;
-  border-radius: 10px !important;
-  background: #f8fafc !important;
-  border: 1px solid #e2e8f0 !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 10px !important;
-}
-
-code, pre, .mono {
-  font-family: "JetBrains Mono", "Cascadia Code", "Fira Code", monospace;
-}
-
-/* --- Ant Design Theme Overrides --- */
-.ant-layout {
-  background: var(--color-canvas) !important;
-}
-
-.ant-layout-sider {
-  background: var(--color-surface) !important;
-  border-right: 1px solid var(--color-border) !important;
-}
-
-.ant-menu-light {
-  background: transparent !important;
-}
-
-.ant-layout-header {
-  background: var(--color-surface) !important;
-  border-bottom: 1px solid var(--color-border) !important;
-}
-
-/* --- Status Tags --- */
-.status-tag-PRESENT {
-  color: var(--color-status-present) !important;
-  background: var(--color-status-present-bg) !important;
-  border-color: var(--color-status-present) !important;
-}
-
-.status-tag-LATE {
-  color: var(--color-status-late) !important;
-  background: var(--color-status-late-bg) !important;
-  border-color: var(--color-status-late) !important;
-}
-
-.status-tag-ABSENT {
-  color: var(--color-status-absent) !important;
-  background: var(--color-status-absent-bg) !important;
-  border-color: var(--color-status-absent) !important;
-}
-
-.status-tag-TRUANT {
-  color: var(--color-status-truant) !important;
-  background: var(--color-status-truant-bg) !important;
-  border-color: var(--color-status-truant) !important;
-}
-
-.status-tag-EXCUSED {
-  color: var(--color-status-excused) !important;
-  background: var(--color-status-excused-bg) !important;
-  border-color: var(--color-status-excused) !important;
-}
-
-/* --- Login Page --- */
-.login-page {
-  display: flex;
+.pose-cue {
   align-items: center;
+  background: #fff1f1;
+  border: 1px solid #e7a6a6;
+  color: #7f1d1d;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px;
+}
+
+.pose-cue > span {
+  align-items: center;
+  background: var(--portal-red);
+  border-radius: 50%;
+  color: #fff;
+  display: flex;
+  height: 34px;
   justify-content: center;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 50%, #1e293b 100%);
+  width: 34px;
 }
 
-.login-card {
-  background: var(--color-surface);
-  border-radius: 16px;
-  padding: 40px;
-  max-width: 420px;
-  width: 100%;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3);
+.pose-cue strong,
+.pose-cue small {
+  display: block;
 }
 
-/* --- Page Content Area --- */
-.page-content {
-  padding: 24px;
+.pose-cue small {
+  color: #8d4a4a;
+  font-size: 12px;
+  margin-top: 2px;
 }
 
-/* --- Card Animations --- */
-.ant-card {
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+.pose-cue.complete {
+  background: #ecfdf3;
+  border-color: #86efac;
+  color: #166534;
 }
 
-.ant-card:hover {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.08);
+.pose-cue.complete > span {
+  background: #166534;
 }
 
-/* --- KPI Stat Cards --- */
-.kpi-card {
-  border-radius: 12px !important;
+.pose-list li {
+  align-items: center;
+  background: #fafbfc;
+  border-left: 3px solid #d9dee6;
+  display: flex;
+  gap: 10px;
+  min-height: 62px;
+  padding: 10px;
 }
 
-.kpi-card .ant-statistic-title {
+.pose-list li > span {
+  align-items: center;
+  background: #eef1f5;
+  border-radius: 50%;
+  color: #56657a;
+  display: flex;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
+}
+
+.pose-list li.active {
+  background: #fff1f1;
+  border-left-color: var(--portal-red);
+}
+
+.pose-list li.complete {
+  border-left-color: #2f7d32;
+}
+
+.pose-list strong,
+.pose-list small {
+  display: block;
+}
+
+.pose-list small {
+  color: #6d7887;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.recording-progress {
+  margin-top: 16px;
+}
+
+.enrollment-actions {
+  border-top: 1px solid #e1e5ea;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 18px;
+}
+
+.biometric-person,
+.biometric-fallback-profile {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.biometric-person {
+  font-weight: 600;
+}
+
+.biometric-fallback-profile {
+  background: #fafbfc;
+  border: 1px solid #e1e5ea;
+  padding: 18px;
+}
+
+.biometric-fallback-profile h3,
+.biometric-fallback-profile p {
+  margin: 0;
+}
+
+.biometric-fallback-profile p {
+  color: #667487;
+  margin: 4px 0 8px;
+}
+
+.enrollment-note {
+  margin-top: 16px;
+}
+
+.enrollment-success-extra {
+  align-items: center;
+  display: inline-flex;
+  gap: 10px;
+}
+
+.enrollment-success-extra img {
+  border: 1px solid #d8dee7;
+  border-radius: 50%;
+  height: 48px;
+  object-fit: cover;
+  width: 48px;
+}
+
+.portal-alert {
+  margin-bottom: 16px;
+}
+
+.student-calendar-card {
+  overflow: hidden;
+}
+
+.student-calendar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.student-calendar-range {
+  color: #67758a;
   font-size: 13px;
-  color: var(--color-text-muted);
+  margin: -4px 0 14px;
 }
 
-.kpi-card .ant-statistic-content {
-  font-weight: 700;
+.student-week-calendar {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(7, minmax(130px, 1fr));
+  min-width: 910px;
 }
 
-/* --- Smooth scrollbar --- */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+.student-calendar-card .ant-card-body {
+  overflow-x: auto;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
+.student-calendar-day {
+  background: #f8fafc;
+  border: 1px solid #e1e6ed;
+  min-height: 190px;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
+.student-calendar-day.is-today {
+  border-color: var(--portal-red);
+  box-shadow: inset 0 3px 0 var(--portal-red);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+.student-calendar-day-heading {
+  background: #f0f3f7;
+  border-bottom: 1px solid #e1e6ed;
+  display: grid;
+  gap: 2px;
+  padding: 9px 10px;
+}
+
+.student-calendar-day.is-today .student-calendar-day-heading {
+  background: #fff2f2;
+}
+
+.student-calendar-day-heading span,
+.student-calendar-empty {
+  color: #7a8798;
+  font-size: 12px;
+}
+
+.student-calendar-events {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+}
+
+.student-calendar-event {
+  background: #fff;
+  border-left: 3px solid var(--portal-red);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+}
+
+.student-calendar-event > span,
+.student-calendar-event > small {
+  color: #5d6b7f;
+  font-size: 12px;
+}
+
+.student-calendar-event > span {
+  line-height: 1.35;
+}
+
+.student-calendar-event .ant-tag {
+  justify-self: start;
+  margin: 3px 0 0;
+}
+
+.dashboard-metrics {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+.admin-metrics {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.admin-overview-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.9fr);
+}
+
+.admin-create-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-create-card {
+  height: 100%;
+}
+
+.admin-create-card .ant-card-head-title {
+  color: #202c3d;
+}
+
+.admin-create-card .ant-form-item {
+  margin-bottom: 14px;
+}
+
+.admin-create-inline-fields {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-create-section-title {
+  border-top: 1px solid #e3e7ec;
+  color: #202c3d;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 4px 0 12px;
+  padding-top: 14px;
+}
+
+.activity-list {
+  display: grid;
+  gap: 12px;
+}
+
+.activity-list article {
+  border-bottom: 1px solid #e3e7ec;
+  padding-bottom: 12px;
+}
+
+.activity-list article:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.activity-list strong,
+.activity-list span {
+  display: block;
+}
+
+.activity-list span {
+  color: #6b7788;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.portal-metric {
+  background: #fff;
+  border: 1px solid #dbe1e8;
+  min-height: 116px;
+  padding: 20px 22px;
+}
+
+.portal-metric strong,
+.portal-metric span {
+  display: block;
+}
+
+.portal-metric strong {
+  color: var(--portal-red);
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.portal-metric span {
+  color: #4f5e73;
+  margin-top: 10px;
+}
+
+.portal-loading {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+}
+
+.course-list {
+  display: grid;
+  gap: 10px;
+}
+
+.course-session {
+  align-items: center;
+  border-bottom: 1px solid #e3e7ec;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  padding: 12px 4px;
+}
+
+.course-session:last-child {
+  border-bottom: 0;
+}
+
+.course-session strong,
+.course-session span {
+  display: block;
+}
+
+.course-session span {
+  color: #67758a;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.course-session-meta {
+  align-items: flex-end;
+  display: grid;
+  gap: 5px;
+  text-align: right;
+}
+
+.schedule-navigation,
+.teacher-session-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.scan-session-card { margin-bottom: 16px; }
+.scan-session-label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 7px; }
+.scan-session-input { display: flex; gap: 10px; max-width: 720px; }
+.scan-session-caption { color: #607086; margin: 10px 0 0; }
+.scan-layout { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.6fr) minmax(300px, .9fr); margin-bottom: 16px; }
+.scan-camera-placeholder { align-items: center; aspect-ratio: 16 / 9; background: #17202d; color: #d9e0e8; display: flex; flex-direction: column; font-size: 14px; gap: 12px; justify-content: center; text-align: center; }
+.scan-camera-placeholder .anticon { font-size: 42px; }
+.scan-camera-actions { border-top: 1px solid #e1e5ea; margin-top: 16px; padding-top: 16px; }
+.scan-stat-grid { display: grid; gap: 8px; grid-template-columns: repeat(2, 1fr); }
+.scan-stat-grid div { background: #fafbfc; border-left: 3px solid #a10000; padding: 10px; }
+.scan-stat-grid strong, .scan-stat-grid span { display: block; }
+.scan-stat-grid strong { color: #a10000; font-size: 22px; }
+.scan-stat-grid span, .unknown-panel > span { color: #647286; font-size: 13px; }
+.unknown-panel { border-top: 1px solid #e1e5ea; margin-top: 16px; padding-top: 16px; }
+.unknown-panel strong { display: block; }
+.unknown-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.unknown-list .ant-image, .unknown-list img { height: 56px; object-fit: cover; width: 56px; }
+.scan-person { align-items: center; display: flex; gap: 8px; }
+.scan-person .ant-image, .scan-person .ant-image img { border-radius: 50%; height: 32px; object-fit: cover; width: 32px; }
+.snapshot-list { display: flex; flex-wrap: wrap; gap: 14px; }
+.snapshot-list article { display: grid; gap: 6px; width: 160px; }
+.snapshot-list .ant-image, .snapshot-list img { height: 100px; object-fit: cover; width: 160px; }
+.snapshot-list span { color: #647286; font-size: 12px; }
+
+.teacher-course-list {
+  gap: 0;
+}
+
+.teacher-session {
+  padding: 16px 4px;
+}
+
+.teacher-session.is-live {
+  background: #fff8f8;
+  border-left: 3px solid var(--portal-red);
+  padding-left: 12px;
+}
+
+.teacher-session-actions {
+  justify-content: flex-end;
+}
+
+.portal-search {
+  width: min(290px, 100%);
+}
+
+.profile-summary {
+  align-items: center;
+  border-bottom: 1px solid #e1e5ea;
+  display: flex;
+  gap: 16px;
+  margin-bottom: 22px;
+  padding-bottom: 20px;
+}
+
+.profile-summary .ant-image,
+.profile-summary .ant-image img {
+  border-radius: 50%;
+  height: 80px;
+  object-fit: cover;
+  width: 80px;
+}
+
+.profile-summary h2,
+.profile-summary p {
+  margin: 0;
+}
+
+.profile-summary p {
+  color: #647286;
+  margin: 4px 0 8px;
+}
+
+@media (max-width: 800px) {
+  .page-heading,
+  .enrollment-layout { flex-direction: column; }
+  .enrollment-layout { gap: 18px; }
+  .camera-panel { width: 100%; }
+  .enrollment-instructions { min-width: 0; }
+  .dashboard-metrics,
+  .admin-metrics { grid-template-columns: 1fr; }
+  .admin-overview-grid { grid-template-columns: 1fr; }
+  .admin-create-grid { grid-template-columns: 1fr; }
+  .scan-layout { grid-template-columns: 1fr; }
+  .scan-session-input { flex-direction: column; }
+  .course-session { align-items: flex-start; flex-direction: column; }
+  .course-session-meta { align-items: flex-start; text-align: left; }
+  .teacher-session-actions { justify-content: flex-start; }
+  .profile-summary { align-items: flex-start; }
+  .portal-shell, .portal-shell.is-collapsed { grid-template-columns: 1fr; }
+  .portal-sidebar { order: 2; border-top: 1px solid #dbe1e8; border-right: 0; }
+  .portal-user-brief, .portal-sidebar-footer, .portal-nav-title { display: none; }
+  .portal-navigation { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); padding: 10px 12px; }
+  .portal-shell.is-collapsed .portal-navigation { padding-inline: 12px; }
+  .portal-shell.is-collapsed .portal-nav-item { justify-content: flex-start; padding-inline: 12px; }
+  .portal-header { position: static; padding: 0 18px; }
+  .portal-content { padding: 20px; }
+  .portal-collapse-button { display: none; }
 }

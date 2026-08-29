@@ -45,11 +45,15 @@ enum CourseClassStatus {
 enum SessionStatus {
   SCHEDULED
   LIVE_NOW
+  REVIEW
+  DEGRADED
+  FAILED
   COMPLETED
   CANCELLED
 }
 
 enum AttendanceStatus {
+  UNCONFIRMED
   PRESENT
   LATE
   ABSENT
@@ -69,10 +73,20 @@ enum RequestStatus {
 }
 
 enum AuditActionType {
+  ADMIN_DATA_CHANGE
   MANUAL_OVERRIDE
   EKYC_APPROVED
+  EKYC_RESET
+  SESSION_STARTED
+  SESSION_ENDED
   INTRUDER_ALERT
   CAMERA_CONFIG_CHANGE
+}
+
+enum FaceDetectionResult {
+  MATCHED
+  UNKNOWN_PERSON
+  AMBIGUOUS
 }
 
 // ----------------------------------------------------------------------------
@@ -86,6 +100,7 @@ model User {
   fullName       String     @map("full_name") @db.VarChar(150)
   role           UserRole
   department     String?    @db.VarChar(150)
+  departmentId   String?    @map("department_id") @db.Uuid
   className      String?    @map("class_name") @db.VarChar(50)
   phone          String?    @db.VarChar(20)
   avatarUrl      String?    @map("avatar_url") @db.VarChar(500)
@@ -100,14 +115,31 @@ model User {
   attendanceLogs        AttendanceLog[]          @relation("StudentAttendance")
   overriddenAttendances AttendanceLog[]          @relation("TeacherOverrides")
   proofSnapshots        SessionProofSnapshot[]
+  faceDetections        SessionFaceDetection[]
   leaveRequests         LeaveRequest[]           @relation("StudentLeaveRequests")
   reviewedLeaves        LeaveRequest[]           @relation("ReviewerLeaveRequests")
   biometricProfile      UserBiometric?
   biometricRequests     BiometricUpdateRequest[] @relation("UserBiometricRequests")
   reviewedBioRequests   BiometricUpdateRequest[] @relation("AdminReviewedBioRequests")
   auditActions          SystemAuditLog[]         @relation("ActorAuditLogs")
+  departmentRef         Department?              @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   @@map("users")
+}
+
+// ----------------------------------------------------------------------------
+// 1A. DEPARTMENTS TABLE
+// ----------------------------------------------------------------------------
+model Department {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique @db.VarChar(50)
+  name      String   @db.VarChar(150)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  users User[]
+
+  @@map("departments")
 }
 
 // ----------------------------------------------------------------------------
@@ -203,8 +235,14 @@ model ClassSession {
   sessionDate   DateTime      @map("session_date") @db.Date
   startTime     DateTime      @map("start_time") @db.Time()
   endTime       DateTime      @map("end_time") @db.Time()
+  periodStart   Int?          @map("period_start")
+  periodEnd     Int?          @map("period_end")
   topic         String?       @db.VarChar(255)
   status        SessionStatus @default(SCHEDULED)
+  startedAt     DateTime?     @map("started_at") @db.Timestamptz()
+  endedAt       DateTime?     @map("ended_at") @db.Timestamptz()
+  rosterVersion String?       @map("roster_version") @db.VarChar(100)
+  failureReason String?       @map("failure_reason")
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz()
 
   // Relations
@@ -212,8 +250,11 @@ model ClassSession {
   classroom      Classroom              @relation(fields: [classroomId], references: [id], onDelete: Restrict)
   attendanceLogs AttendanceLog[]
   proofSnapshots SessionProofSnapshot[]
+  faceDetections SessionFaceDetection[]
   leaveRequests  LeaveRequest[]
 
+  @@index([sessionDate, classroomId])
+  @@index([courseClassId, sessionDate])
   @@map("class_sessions")
 }
 
@@ -224,8 +265,11 @@ model AttendanceLog {
   id               String           @id @default(uuid()) @db.Uuid
   sessionId        String           @map("session_id") @db.Uuid
   studentId        String           @map("student_id") @db.Uuid
-  status           AttendanceStatus @default(ABSENT)
+  status           AttendanceStatus @default(UNCONFIRMED)
   lateMinutes      Int              @default(0) @map("late_minutes")
+  firstSeenAt      DateTime?        @map("first_seen_at") @db.Timestamptz()
+  bestScore        Decimal?         @map("best_score") @db.Decimal(5, 4)
+  bestEvidenceId   String?          @map("best_evidence_id") @db.Uuid
   checkpoints      Json?            @default("{\"15m\": false, \"30m\": false, \"45m\": false, \"60m\": false}")
   isGuestStudent   Boolean          @default(false) @map("is_guest_student")
   manualOverrideBy String?          @map("manual_override_by") @db.Uuid
@@ -265,6 +309,30 @@ model SessionProofSnapshot {
 }
 
 // ----------------------------------------------------------------------------
+// 8A. SESSION_FACE_DETECTIONS TABLE (Unknown / Ambiguous / Matched Face Crops)
+// ----------------------------------------------------------------------------
+model SessionFaceDetection {
+  id            String              @id @default(uuid()) @db.Uuid
+  sessionId     String              @map("session_id") @db.Uuid
+  studentId     String?             @map("student_id") @db.Uuid
+  result        FaceDetectionResult
+  frameId       String              @map("frame_id") @db.VarChar(100)
+  imageUrl      String              @map("image_url") @db.VarChar(500)
+  score         Decimal?            @db.Decimal(5, 4)
+  runnerUpScore Decimal?            @map("runner_up_score") @db.Decimal(5, 4)
+  quality       Decimal?            @db.Decimal(5, 4)
+  pose          String?             @db.VarChar(20)
+  boundingBox   Json?               @map("bounding_box")
+  capturedAt    DateTime            @default(now()) @map("captured_at") @db.Timestamptz()
+
+  session ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student User?        @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId, result])
+  @@map("session_face_detections")
+}
+
+// ----------------------------------------------------------------------------
 // 9. LEAVE_REQUESTS TABLE
 // ----------------------------------------------------------------------------
 model LeaveRequest {
@@ -292,13 +360,16 @@ model LeaveRequest {
 // 10. USER_BIOMETRICS TABLE (Kho Vector & FAISS Map)
 // ----------------------------------------------------------------------------
 model UserBiometric {
-  id              String    @id @default(uuid()) @db.Uuid
-  userId          String    @unique @map("user_id") @db.Uuid
-  faissVectorId   BigInt?   @unique @map("faiss_vector_id")
-  enrolledFaceUrl String?   @map("enrolled_face_url") @db.VarChar(500)
-  lastEnrolledAt  DateTime? @map("last_enrolled_at") @db.Timestamptz()
-  matchConfidence Decimal?  @map("match_confidence") @db.Decimal(5, 2)
-  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @unique @map("user_id") @db.Uuid
+  faissVectorId      BigInt?   @unique @map("faiss_vector_id")
+  enrolledFaceUrl    String?   @map("enrolled_face_url") @db.VarChar(500)
+  lastEnrolledAt     DateTime? @map("last_enrolled_at") @db.Timestamptz()
+  modelVersion       String?   @map("model_version") @db.VarChar(100)
+  embeddingDimension Int?      @map("embedding_dimension")
+  enrollmentVersion  Int       @default(1) @map("enrollment_version")
+  matchConfidence    Decimal?  @map("match_confidence") @db.Decimal(5, 2)
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -1,252 +1,191 @@
-import { useCallback, useEffect, useState } from "react";
-import { Card, Table, Tag, Button, Select, Image, Modal, Form, Input, Alert, Row, Col, Statistic, message, Badge, Typography } from "antd";
-import {
-  CameraOutlined,
-  VideoCameraOutlined,
-  ExclamationCircleOutlined,
-  CheckCircleOutlined,
-  WarningOutlined,
-} from "@ant-design/icons";
+import { useEffect, useState } from "react";
+import { Alert, Button, Card, Image, Input, Modal, Select, Table, Tag, message } from "antd";
+import { CameraOutlined, EditOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/utils/api";
-import { connectSocket, joinSession, disconnectSocket } from "@/utils/socket";
-import { statusLabels, type AttendanceStatus, type SessionDetail, type WsFaceDetected, type WsStatUpdate, type WsIntruderAlert, type SnapshotMilestone } from "@/types";
+import { connectSocket, disconnectSocket, joinSession } from "@/utils/socket";
+import { statusLabels, type AttendanceStatus, type SessionDetail, type SnapshotMilestone, type WsFaceDetected, type WsIntruderAlert, type WsStatUpdate } from "@/types";
 
-const { Text } = Typography;
-const { TextArea } = Input;
+interface AttendanceRow {
+  studentId: string;
+  studentCode: string;
+  fullName: string;
+  avatarUrl?: string;
+  firstDetectedAt?: string;
+  matchPercentage?: number;
+  status: AttendanceStatus;
+}
 
-// =============================================================================
-// Teacher: Live Scan — GET /api/v1/teacher/sessions/{id} (§4.1.2)
-// WebSocket: attendance:face_detected, attendance:stat_update, etc.
-// =============================================================================
+interface TriggerSnapshotResponse {
+  snapshotUrl: string;
+  capturedAt: string;
+  detectedFacesCount: number;
+}
+
+interface EvidenceSnapshot {
+  milestone: string;
+  time: string;
+  snapshotUrl: string;
+}
 
 export function TeacherScan({ initialSessionId }: { initialSessionId?: string }) {
   const [sessionId, setSessionId] = useState(initialSessionId ?? "");
-  const [overrideStudent, setOverrideStudent] = useState<{ studentId: string; fullName: string } | null>(null);
-  const [overrideForm] = Form.useForm();
-  const [intruderAlert, setIntruderAlert] = useState<WsIntruderAlert | null>(null);
   const [liveCounts, setLiveCounts] = useState<WsStatUpdate | null>(null);
-  const [snapshots, setSnapshots] = useState<SnapshotMilestone[]>([]);
+  const [unknownFaces, setUnknownFaces] = useState<string[]>([]);
+  const [snapshots, setSnapshots] = useState<EvidenceSnapshot[]>([]);
+  const [editing, setEditing] = useState<AttendanceRow | null>(null);
+  const [status, setStatus] = useState<AttendanceStatus>("PRESENT");
   const queryClient = useQueryClient();
+  const [actionLoading, setActionLoading] = useState(false);
 
-  // Fetch session detail
-  const { data, isLoading } = useQuery<SessionDetail>({
+  const { data, isLoading, isError } = useQuery<SessionDetail>({
     queryKey: ["teacher-session", sessionId],
     queryFn: () => api.get(`/teacher/sessions/${sessionId}`) as Promise<SessionDetail>,
-    enabled: !!sessionId,
-    refetchInterval: 15000, // poll every 15s as backup
+    enabled: Boolean(sessionId),
+    refetchInterval: 15_000,
   });
 
-  // WebSocket connection
   useEffect(() => {
     if (!sessionId) return;
     const socket = connectSocket();
     joinSession(sessionId);
 
-    socket.on("attendance:face_detected", (payload: WsFaceDetected) => {
-      message.info(`AI nhận diện: ${payload.fullName} (${payload.matchPercentage}%)`);
-      queryClient.invalidateQueries({ queryKey: ["teacher-session", sessionId] });
-    });
+    const onFaceDetected = (_payload: WsFaceDetected) => queryClient.invalidateQueries({ queryKey: ["teacher-session", sessionId] });
+    const onStats = (payload: WsStatUpdate) => setLiveCounts(payload);
+    const onSnapshot = (payload: SnapshotMilestone) => setSnapshots((current) => [...current, payload]);
+    const onIntruder = (payload: WsIntruderAlert) => {
+      setUnknownFaces((current) => payload.cropUrl ? [payload.cropUrl, ...current] : current);
+      message.warning("Phát hiện người lạ trong lớp học.");
+    };
 
-    socket.on("attendance:stat_update", (payload: WsStatUpdate) => {
-      setLiveCounts(payload);
-    });
-
-    socket.on("attendance:snapshot_captured", (payload: SnapshotMilestone) => {
-      setSnapshots((prev) => [...prev, payload]);
-    });
-
-    socket.on("security:intruder_alert", (payload: WsIntruderAlert) => {
-      setIntruderAlert(payload);
-    });
-
+    socket.on("attendance:face_detected", onFaceDetected);
+    socket.on("attendance:stat_update", onStats);
+    socket.on("attendance:snapshot_captured", onSnapshot);
+    socket.on("security:intruder_alert", onIntruder);
     return () => {
-      socket.off("attendance:face_detected");
-      socket.off("attendance:stat_update");
-      socket.off("attendance:snapshot_captured");
-      socket.off("security:intruder_alert");
+      socket.off("attendance:face_detected", onFaceDetected);
+      socket.off("attendance:stat_update", onStats);
+      socket.off("attendance:snapshot_captured", onSnapshot);
+      socket.off("security:intruder_alert", onIntruder);
       disconnectSocket();
     };
-  }, [sessionId, queryClient]);
-
-  // Trigger instant snapshot
-  const triggerSnapshot = async () => {
-    try {
-      await api.post(`/teacher/sessions/${sessionId}/trigger-snapshot`);
-      message.success("Đã chụp ảnh đối soát toàn lớp!");
-      queryClient.invalidateQueries({ queryKey: ["teacher-session", sessionId] });
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : "Chụp thất bại");
-    }
-  };
-
-  // Manual override
-  const handleOverride = async (values: { newStatus: AttendanceStatus; reason: string }) => {
-    if (!overrideStudent) return;
-    try {
-      await api.put(`/teacher/sessions/${sessionId}/attendance/${overrideStudent.studentId}/override`, values);
-      message.success("Đã sửa điểm danh thủ công.");
-      setOverrideStudent(null);
-      overrideForm.resetFields();
-      queryClient.invalidateQueries({ queryKey: ["teacher-session", sessionId] });
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : "Cập nhật thất bại");
-    }
-  };
+  }, [queryClient, sessionId]);
 
   const counts = liveCounts ?? data?.counts ?? { total: 0, present: 0, late: 0, absent: 0, truant: 0 };
+  const rows = (data?.students ?? []) as AttendanceRow[];
+
+  useEffect(() => {
+    setUnknownFaces((data?.unknownFaces ?? []).map((item) => item.cropUrl).filter((url): url is string => Boolean(url)));
+  }, [data?.unknownFaces]);
+
+  const startSession = async () => {
+    if (!sessionId) return;
+    setActionLoading(true);
+    try { await api.post(`/teacher/sessions/${sessionId}/start`); queryClient.invalidateQueries({ queryKey: ["teacher-session", sessionId] }); message.success("Đã mở phiên; hệ thống bắt đầu quét tự động."); }
+    catch (cause) { message.error(cause instanceof Error ? cause.message : "Không thể mở phiên."); }
+    finally { setActionLoading(false); }
+  };
+
+  const endSession = async () => {
+    if (!sessionId) return;
+    setActionLoading(true);
+    try { await api.post(`/teacher/sessions/${sessionId}/end`, { confirmEarly: false }); queryClient.invalidateQueries({ queryKey: ["teacher-session", sessionId] }); message.success("Đã kết thúc và chốt điểm danh."); }
+    catch (cause) { message.warning(cause instanceof Error ? cause.message : "Phiên chưa thể kết thúc."); }
+    finally { setActionLoading(false); }
+  };
+
+  const triggerSnapshot = async () => {
+    if (!sessionId) return;
+    try {
+      const result = await api.post(`/teacher/sessions/${sessionId}/trigger-snapshot`) as TriggerSnapshotResponse;
+      setSnapshots((current) => [...current, {
+        milestone: `Thủ công · ${result.detectedFacesCount} khuôn mặt`,
+        time: new Date(result.capturedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+        snapshotUrl: result.snapshotUrl,
+      }]);
+      message.success("Đã yêu cầu chụp ảnh đối soát.");
+    } catch (cause) {
+      message.error(cause instanceof Error ? cause.message : "Không thể chụp ảnh đối soát.");
+    }
+  };
+
+  const saveOverride = async () => {
+    if (!editing) return;
+    try {
+      await api.put(`/teacher/sessions/${sessionId}/attendance/${editing.studentId}/override`, {
+        newStatus: status,
+        reason: "Giảng viên hậu kiểm tại lớp",
+      });
+      setEditing(null);
+      queryClient.invalidateQueries({ queryKey: ["teacher-session", sessionId] });
+      message.success("Đã lưu thay đổi điểm danh.");
+    } catch (cause) {
+      message.error(cause instanceof Error ? cause.message : "Không thể cập nhật điểm danh.");
+    }
+  };
 
   const columns = [
+    { title: "Mã SV", dataIndex: "studentCode", key: "studentCode", width: 115 },
     {
-      title: "MSSV",
-      dataIndex: "studentCode",
-      key: "studentCode",
-      width: 100,
-      render: (code: string) => <Text strong>{code}</Text>,
+      title: "Sinh viên",
+      key: "student",
+      render: (_: unknown, row: AttendanceRow) => <div className="scan-person">{row.avatarUrl ? <Image preview={false} src={row.avatarUrl} alt="Ảnh sinh viên" /> : null}<span>{row.fullName}</span></div>,
     },
-    { title: "Họ và tên", dataIndex: "fullName", key: "fullName" },
-    {
-      title: "Avatar",
-      dataIndex: "avatarUrl",
-      key: "avatarUrl",
-      width: 60,
-      render: (url: string) => url ? <Image src={url} width={36} height={36} style={{ borderRadius: "50%", objectFit: "cover" }} /> : "—",
-    },
-    {
-      title: "Nhận diện lúc",
-      dataIndex: "firstDetectedAt",
-      key: "firstDetectedAt",
-      width: 130,
-      render: (t: string) => t ? new Date(t).toLocaleTimeString("vi-VN") : "—",
-    },
-    {
-      title: "Match %",
-      dataIndex: "matchPercentage",
-      key: "matchPercentage",
-      width: 90,
-      render: (p: number) => p ? <Tag color={p >= 95 ? "success" : p >= 80 ? "warning" : "error"}>{p}%</Tag> : "—",
-    },
-    {
-      title: "Trạng thái",
-      dataIndex: "status",
-      key: "status",
-      width: 120,
-      render: (s: AttendanceStatus) => <Tag className={`status-tag-${s}`}>{statusLabels[s]}</Tag>,
-    },
-    {
-      title: "Thao tác",
-      key: "action",
-      width: 100,
-      render: (_: unknown, r: { studentId: string; fullName: string }) => (
-        <Button size="small" onClick={() => setOverrideStudent(r)}>Sửa</Button>
-      ),
-    },
+    { title: "Ghi nhận", dataIndex: "firstDetectedAt", key: "firstDetectedAt", width: 125, render: (value?: string) => value ? new Date(value).toLocaleTimeString("vi-VN") : "Chưa ghi nhận" },
+    { title: "Điểm khớp", dataIndex: "matchPercentage", key: "matchPercentage", width: 105, render: (value?: number) => value ? `${value}%` : "—" },
+    { title: "Trạng thái", dataIndex: "status", key: "status", width: 130, render: (value: AttendanceStatus) => <Tag className={`status-tag-${value}`}>{statusLabels[value]}</Tag> },
+    { title: "", key: "edit", width: 80, render: (_: unknown, row: AttendanceRow) => <Button size="small" icon={<EditOutlined />} onClick={() => { setEditing(row); setStatus(row.status); }}>Sửa</Button> },
   ];
 
   return (
-    <div className="space-y-4">
-      {/* Session Input */}
-      <Card size="small">
-        <div className="flex items-center gap-4 flex-wrap">
-          <Text strong>Session ID:</Text>
-          <Input
-            value={sessionId}
-            onChange={(e) => setSessionId(e.target.value)}
-            placeholder="Nhập Session ID"
-            style={{ width: 280 }}
-          />
-          {data?.session && (
-            <Tag color="red">🔴 {data.session.courseName} · {data.session.roomCode}</Tag>
-          )}
+    <section aria-labelledby="teacher-scan-title">
+      <div className="page-heading">
+        <div>
+          <h1 id="teacher-scan-title">Điểm danh AI</h1>
+          <p>Chỉ sinh viên thuộc lớp học phần mới được ghi nhận. Người ngoài danh sách được giữ là Unknown.</p>
         </div>
+      </div>
+      <Card className="portal-card scan-session-card">
+        <label className="scan-session-label" htmlFor="scan-session-id">Mã ca học</label>
+        <div className="scan-session-input">
+          <Input id="scan-session-id" value={sessionId} onChange={(event) => setSessionId(event.target.value)} placeholder="Chọn lớp từ trang Lớp giảng dạy hoặc nhập mã ca học" />
+          <Button type="primary" onClick={() => queryClient.invalidateQueries({ queryKey: ["teacher-session", sessionId] })} disabled={!sessionId}>Tải ca học</Button>
+          <Button onClick={startSession} loading={actionLoading} disabled={!sessionId || data?.session?.status === "LIVE_NOW"}>Mở phiên</Button>
+          <Button danger onClick={endSession} loading={actionLoading} disabled={!sessionId || (data?.session?.status !== "LIVE_NOW" && data?.session?.status !== "DEGRADED")}>Kết thúc</Button>
+        </div>
+        {data?.session && <p className="scan-session-caption">{data.session.courseName} · {data.session.roomCode} · {data.session.status}</p>}
       </Card>
 
-      {/* Intruder Alert */}
-      {intruderAlert && (
-        <Alert
-          type="error"
-          showIcon
-          icon={<WarningOutlined />}
-          banner
-          closable
-          onClose={() => setIntruderAlert(null)}
-          message="⚠️ CẢNH BÁO: Phát hiện người lạ trong lớp học!"
-          description={
-            intruderAlert.cropUrl ? (
-              <Image src={intruderAlert.cropUrl} width={100} alt="Intruder" />
-            ) : undefined
-          }
-        />
-      )}
+      {isError && <Alert className="portal-alert" type="warning" showIcon message="Chưa tải được ca học" description="Backend chưa cung cấp endpoint GET /api/v1/teacher/sessions/:id theo tài liệu." />}
 
-      {/* Live Stats */}
-      <Row gutter={[12, 12]}>
-        <Col xs={12} sm={6}><Card className="kpi-card"><Statistic title="Tổng sĩ số" value={counts.total} /></Card></Col>
-        <Col xs={12} sm={6}><Card className="kpi-card"><Statistic title="Có mặt" value={counts.present} valueStyle={{ color: "#10b981" }} prefix={<CheckCircleOutlined />} /></Card></Col>
-        <Col xs={12} sm={6}><Card className="kpi-card"><Statistic title="Đi muộn" value={counts.late} valueStyle={{ color: "#d97706" }} /></Card></Col>
-        <Col xs={12} sm={6}><Card className="kpi-card"><Statistic title="Vắng / Bỏ học" value={counts.absent + counts.truant} valueStyle={{ color: "#dc2626" }} /></Card></Col>
-      </Row>
-
-      {/* Student Roster */}
-      <Card
-        title={`Danh sách sinh viên (${data?.students?.length ?? 0})`}
-        extra={
-          <Button type="primary" icon={<CameraOutlined />} onClick={triggerSnapshot} disabled={!sessionId}>
-            Chụp đối soát ngay
-          </Button>
-        }
-      >
-        <Table
-          columns={columns}
-          dataSource={data?.students ?? []}
-          rowKey="studentId"
-          loading={isLoading}
-          pagination={false}
-          size="middle"
-        />
-      </Card>
-
-      {/* Snapshot Milestones */}
-      {snapshots.length > 0 && (
-        <Card title="Ảnh Snapshot đối soát chu kỳ">
-          <div className="flex gap-4 flex-wrap">
-            {snapshots.map((snap, i) => (
-              <Card key={i} size="small" style={{ width: 180 }}>
-                <Image src={snap.snapshotUrl} width="100%" alt={`Snapshot ${snap.milestone}`} />
-                <div className="mt-2">
-                  <Tag>{snap.milestone}</Tag>
-                  <Text type="secondary" className="text-xs">{snap.time}</Text>
-                </div>
-              </Card>
-            ))}
-          </div>
+      <div className="scan-layout">
+        <Card className="portal-card scan-camera-card" title="Camera lớp học">
+          <div className="scan-camera-placeholder"><CameraOutlined /><span>Luồng camera sẽ do Gateway cấp cho phiên học đang mở.</span></div>
+          <div className="scan-camera-actions"><Button type="primary" icon={<CameraOutlined />} onClick={triggerSnapshot} disabled={!sessionId}>Chụp đối soát</Button></div>
         </Card>
-      )}
+        <Card className="portal-card" title="Tình trạng lớp">
+          <div className="scan-stat-grid">
+            <div><strong>{counts.total}</strong><span>Sĩ số</span></div>
+            <div><strong>{counts.present}</strong><span>Có mặt</span></div>
+            <div><strong>{counts.late}</strong><span>Đi muộn</span></div>
+            <div><strong>{counts.absent + counts.truant}</strong><span>Vắng</span></div>
+          </div>
+          <div className="unknown-panel"><strong><ExclamationCircleOutlined /> Người lạ: {unknownFaces.length}</strong>{unknownFaces.length ? <div className="unknown-list">{unknownFaces.map((url, index) => <Image key={`${url}-${index}`} src={url} alt="Khuôn mặt chưa xác định" />)}</div> : <span>Chưa phát hiện người lạ.</span>}</div>
+        </Card>
+      </div>
 
-      {/* Override Modal */}
-      <Modal
-        title={`Sửa điểm danh: ${overrideStudent?.fullName ?? ""}`}
-        open={!!overrideStudent}
-        onCancel={() => setOverrideStudent(null)}
-        footer={null}
-      >
-        <Form form={overrideForm} layout="vertical" onFinish={handleOverride}>
-          <Form.Item name="newStatus" label="Trạng thái mới" rules={[{ required: true }]}>
-            <Select placeholder="Chọn trạng thái">
-              <Select.Option value="PRESENT">Đúng giờ</Select.Option>
-              <Select.Option value="LATE">Đi muộn</Select.Option>
-              <Select.Option value="ABSENT">Vắng mặt</Select.Option>
-              <Select.Option value="EXCUSED">Nghỉ có phép</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="reason" label="Lý do giải trình" rules={[{ required: true, message: "Bắt buộc nhập lý do" }]}>
-            <TextArea rows={2} placeholder="VD: Sinh viên có mặt thực tế, bị lỗi camera góc khuất" />
-          </Form.Item>
-          <Button type="primary" htmlType="submit" block>
-            Xác nhận sửa điểm danh
-          </Button>
-        </Form>
+      <Card className="portal-card" title={`Danh sách sinh viên · ${rows.length}`}>
+        <Table columns={columns} dataSource={rows} rowKey="studentId" loading={isLoading} pagination={false} scroll={{ x: 780 }} />
+      </Card>
+
+      {snapshots.length > 0 && <Card className="portal-card" title="Ảnh đối soát"><div className="snapshot-list">{snapshots.map((snapshot, index) => <article key={`${snapshot.snapshotUrl}-${index}`}><Image src={snapshot.snapshotUrl} alt={`Ảnh ${snapshot.milestone}`} /><span>{snapshot.milestone} · {snapshot.time}</span></article>)}</div></Card>}
+
+      <Modal title={`Sửa điểm danh · ${editing?.fullName ?? ""}`} open={Boolean(editing)} onCancel={() => setEditing(null)} onOk={saveOverride} okText="Lưu" cancelText="Hủy">
+        <label className="scan-session-label" htmlFor="attendance-status">Trạng thái</label>
+        <Select id="attendance-status" value={status} onChange={setStatus} style={{ width: "100%" }} options={[
+          { value: "PRESENT", label: "Đúng giờ" }, { value: "LATE", label: "Đi muộn" }, { value: "ABSENT", label: "Vắng mặt" }, { value: "EXCUSED", label: "Có phép" },
+        ]} />
       </Modal>
-    </div>
+    </section>
   );
 }

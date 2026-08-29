@@ -1,4 +1,5 @@
 import prisma from '../config/prisma';
+import { periodLabel } from '../utils/study-periods';
 
 export interface AdminClassesFilter {
   search?: string;
@@ -50,6 +51,7 @@ export class AdminClassService {
             sessions: {
               include: {
                 classroom: true,
+                attendanceLogs: { select: { status: true } },
                 _count: {
                   select: {
                     attendanceLogs: true,
@@ -82,7 +84,7 @@ export class AdminClassService {
     const treeData = courses.map((course) => {
       let courseTotalStudents = 0;
 
-      const children = course.courseClasses.map((cClass, idx) => {
+      const children = course.courseClasses.map((cClass) => {
         totalClassesCount++;
         const studentCount = cClass._count.enrollments;
         courseTotalStudents += studentCount;
@@ -93,6 +95,28 @@ export class AdminClassService {
         // Phân tích lịch học & phòng học từ sessions
         const firstSession = cClass.sessions[0];
         const classroom = firstSession?.classroom;
+        const scheduleSlots = Array.from(new Map(cClass.sessions.map((session) => {
+          const sessionDate = new Date(session.sessionDate);
+          const startTime = new Date(session.startTime);
+          const endTime = new Date(session.endTime);
+          const startText = `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`;
+          const endText = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
+          const roomCode = session.classroom?.roomCode || '';
+          const key = `${sessionDate.getDay()}|${startText}|${endText}|${roomCode}`;
+          return [key, {
+            dayOfWeek: sessionDate.getDay(),
+            dayName: ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'][sessionDate.getDay()],
+            startTime: startText,
+            endTime: endText,
+            periodStart: session.periodStart,
+            periodEnd: session.periodEnd,
+            periodLabel: periodLabel(session.periodStart, session.periodEnd),
+            roomCode,
+          } as const];
+        }))).map(([, value]) => value);
+        const allScheduleText = scheduleSlots.length
+          ? scheduleSlots.map((slot) => `${slot.dayName} (${slot.periodLabel || `${slot.startTime} - ${slot.endTime}`}${slot.roomCode ? ` · ${slot.roomCode}` : ''})`).join('; ')
+          : 'Chưa xếp lịch';
 
         // Ngày trong tuần và giờ
         let scheduleText = 'Chưa xếp lịch';
@@ -107,6 +131,7 @@ export class AdminClassService {
           const eStr = `${String(eTime.getHours()).padStart(2, '0')}:${String(eTime.getMinutes()).padStart(2, '0')}`;
           scheduleText = `${dayOfWeek} (${sStr} - ${eStr})`;
         }
+        scheduleText = allScheduleText;
 
         // Tình trạng camera
         const cameraStatus = classroom?.cameraStatus || 'OFFLINE';
@@ -116,11 +141,14 @@ export class AdminClassService {
         // Tiến độ buổi học
         const totalSessions = course.totalSessions || 15;
         const completedSessions = cClass.sessions.filter(
-          (s) => s.status === 'COMPLETED' || new Date(s.sessionDate) < now
-        ).length || (idx === 0 ? 4 : 2);
+          (s) => s.status === 'COMPLETED'
+        ).length;
 
         // Tỉ lệ chuyên cần trung bình
-        const attendanceRate = studentCount > 0 ? (idx === 0 ? 94.2 : 91.5) : 0;
+        const attendanceLogs = cClass.sessions.flatMap((session) => session.attendanceLogs);
+        const attendanceRate = attendanceLogs.length > 0
+          ? Number(((attendanceLogs.filter((log) => ['PRESENT', 'LATE', 'EXCUSED'].includes(log.status)).length / attendanceLogs.length) * 100).toFixed(1))
+          : 0;
 
         // Trạng thái hôm nay
         let todayStatus: 'LIVE' | 'UPCOMING' | 'IDLE' = 'IDLE';
@@ -145,11 +173,6 @@ export class AdminClassService {
           } else if (currentTimeMinutes < sMinutes) {
             todayStatus = 'UPCOMING';
           }
-        } else if (idx === 0) {
-          todayStatus = 'LIVE';
-          liveClassesCount++;
-        } else if (idx === 1) {
-          todayStatus = 'UPCOMING';
         }
 
         return {
@@ -163,13 +186,13 @@ export class AdminClassService {
           teacherEmail: cClass.teacher?.email,
           totalStudents: studentCount,
           schedule: scheduleText,
+          scheduleSlots,
           classroom: classroom
             ? `P.${classroom.roomCode} (${classroom.building})`
             : 'Chưa xếp phòng',
           cameraStatus,
           cameraFps,
           cameraLatency,
-          rtspUrl: classroom?.rtspUrl,
           completedSessions,
           totalSessions,
           attendanceRate,

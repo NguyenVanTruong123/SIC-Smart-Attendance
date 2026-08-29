@@ -9,10 +9,9 @@ let socket: Socket | null = null;
 
 export function getSocket(): Socket {
   if (!socket) {
-    const token = useAuthStore.getState().accessToken;
     socket = io("/attendance", {
       path: "/ws",
-      auth: { token },
+      auth: (callback) => callback({ token: useAuthStore.getState().accessToken }),
       transports: ["websocket", "polling"],
       autoConnect: false,
     });

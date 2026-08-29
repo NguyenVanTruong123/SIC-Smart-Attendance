@@ -19,6 +19,7 @@ import {
   Progress,
   Radio,
   Alert,
+  Avatar,
 } from "antd";
 import {
   SearchOutlined,
@@ -93,6 +94,7 @@ export function AdminBiometrics() {
   const [status, setStatus] = useState("ALL");
   const [page, setPage] = useState(1);
   const [detailUser, setDetailUser] = useState<string | null>(null);
+  const [selectedBiometric, setSelectedBiometric] = useState<BiometricItem | null>(null);
   const [reEkycId, setReEkycId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
@@ -114,7 +116,7 @@ export function AdminBiometrics() {
   });
 
   // Fetch detail
-  const { data: detail } = useQuery<BiometricDetail>({
+  const { data: detail, isError: isDetailUnavailable } = useQuery<BiometricDetail>({
     queryKey: ["admin-biometric-detail", detailUser],
     queryFn: () => api.get(`/admin/biometrics/${detailUser}`) as Promise<BiometricDetail>,
     enabled: !!detailUser,
@@ -193,7 +195,17 @@ export function AdminBiometrics() {
       width: 110,
       render: (code: string) => <Text strong>{code}</Text>,
     },
-    { title: "Họ và tên", dataIndex: "fullName", key: "fullName" },
+    {
+      title: "Họ và tên",
+      dataIndex: "fullName",
+      key: "fullName",
+      render: (fullName: string, record: BiometricItem) => (
+        <div className="biometric-person">
+          <Avatar size={34} src={record.avatarUrl}>{fullName.slice(0, 1)}</Avatar>
+          <span>{fullName}</span>
+        </div>
+      ),
+    },
     { title: "Lớp", dataIndex: "className", key: "className", width: 100 },
     { title: "Khoa", dataIndex: "department", key: "department", width: 180, ellipsis: true },
     {
@@ -201,7 +213,7 @@ export function AdminBiometrics() {
       dataIndex: "vectorId",
       key: "vectorId",
       width: 100,
-      render: (v: string) => (v ? <Tag color="blue">{v}</Tag> : "—"),
+      render: (v: string) => (v ? <Tag color="red">{v}</Tag> : "—"),
     },
     {
       title: "eKYC",
@@ -220,8 +232,11 @@ export function AdminBiometrics() {
       width: 180,
       render: (_: unknown, r: BiometricItem) => (
         <div className="flex gap-2">
-          <Button size="small" icon={<EyeOutlined />} onClick={() => setDetailUser(r.id)}>
-            Chi tiết
+          <Button size="small" icon={<EyeOutlined />} onClick={() => {
+            setSelectedBiometric(r);
+            setDetailUser(r.id);
+          }}>
+            Xem hồ sơ
           </Button>
           {r.hasPendingResetRequest && r.pendingRequestId && (
             <Button size="small" type="primary" danger onClick={() => setReEkycId(r.pendingRequestId!)}>
@@ -306,7 +321,6 @@ export function AdminBiometrics() {
             />
             <Button
               type="primary"
-              style={{ background: "#10b981", borderColor: "#10b981" }}
               icon={<UploadOutlined />}
               onClick={() => {
                 setSelectedFile(null);
@@ -349,9 +363,12 @@ export function AdminBiometrics() {
 
       {/* Detail Modal */}
       <Modal
-        title={`Hồ sơ sinh trắc: ${detail?.user?.fullName ?? ""}`}
+        title={`Hồ sơ sinh trắc: ${detail?.user?.fullName ?? selectedBiometric?.fullName ?? ""}`}
         open={!!detailUser}
-        onCancel={() => setDetailUser(null)}
+        onCancel={() => {
+          setDetailUser(null);
+          setSelectedBiometric(null);
+        }}
         footer={null}
         width={640}
       >
@@ -364,7 +381,7 @@ export function AdminBiometrics() {
               <Descriptions.Item label="AI Model">{detail.user.aiModel}</Descriptions.Item>
               <Descriptions.Item label="Match Score">{detail.user.matchScore}%</Descriptions.Item>
               <Descriptions.Item label="Ảnh gốc">
-                <Image src={detail.user.masterImageUrl} width={80} alt="Master" />
+                <Image src={detail.user.previewBase64 || detail.user.masterImageUrl} width={80} alt="Master" />
               </Descriptions.Item>
             </Descriptions>
             <Divider>3 Ảnh CCTV gần nhất</Divider>
@@ -383,6 +400,27 @@ export function AdminBiometrics() {
               ))}
             </div>
           </>
+        )}
+        {!detail && selectedBiometric && (
+          <div className="biometric-fallback-profile">
+            <Avatar size={80} src={selectedBiometric.avatarUrl}>{selectedBiometric.fullName.slice(0, 1)}</Avatar>
+            <div>
+              <h3>{selectedBiometric.fullName}</h3>
+              <p>{selectedBiometric.userCode} · {selectedBiometric.className || selectedBiometric.department}</p>
+              <Tag color={selectedBiometric.isFaceEnrolled ? "success" : "default"}>
+                {selectedBiometric.isFaceEnrolled ? "Đã đăng ký khuôn mặt" : "Chưa đăng ký khuôn mặt"}
+              </Tag>
+            </div>
+          </div>
+        )}
+        {isDetailUnavailable && (
+          <Alert
+            className="mt-4"
+            type="warning"
+            showIcon
+            message="Chưa tải được hồ sơ chi tiết"
+            description="Backend hiện mới cung cấp danh sách sinh trắc học. Endpoint hồ sơ chi tiết theo tài liệu chưa được triển khai."
+          />
         )}
       </Modal>
 

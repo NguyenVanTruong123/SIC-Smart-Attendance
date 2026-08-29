@@ -4,9 +4,9 @@
 
 // --- Enums (UPPERCASE as per API docs) ---
 export type Role = "ADMIN" | "TEACHER" | "STUDENT";
-export type AttendanceStatus = "PRESENT" | "LATE" | "ABSENT" | "TRUANT" | "EXCUSED";
+export type AttendanceStatus = "UNCONFIRMED" | "PRESENT" | "LATE" | "ABSENT" | "TRUANT" | "EXCUSED";
 export type CameraStatus = "ONLINE" | "OFFLINE" | "MAINTENANCE";
-export type SessionStatus = "LIVE_NOW" | "UPCOMING" | "COMPLETED";
+export type SessionStatus = "SCHEDULED" | "LIVE_NOW" | "REVIEW" | "DEGRADED" | "FAILED" | "UPCOMING" | "COMPLETED" | "CANCELLED";
 export type LeaveRequestType = "FULL_SESSION" | "LATE_ENTRY";
 export type LeaveRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type EkycStatus = "ENROLLED" | "NOT_ENROLLED" | "PENDING_RESET";
@@ -73,6 +73,33 @@ export interface EkycEnrollResponse {
   redirectUrl: string;
 }
 
+export interface StudentBiometricProfileData {
+  student: {
+    id: string;
+    userCode: string;
+    fullName: string;
+    email: string;
+    department?: string | null;
+    className?: string | null;
+  };
+  status: EkycStatus;
+  biometric: {
+    vectorId: string | null;
+    modelVersion: string | null;
+    embeddingDimension: number | null;
+    enrollmentVersion: number;
+    enrolledAt: string | null;
+  } | null;
+  previewUrl: string | null;
+}
+
+export interface PoseDetection {
+  pose: "front" | "left" | "right" | "unknown";
+  confidence: number;
+  faceCount: number;
+  bbox?: { x: number; y: number; width: number; height: number };
+}
+
 // --- Admin: Classrooms (§3.1 docs) ---
 export interface ClassroomKpis {
   totalClassrooms: number;
@@ -90,7 +117,7 @@ export interface Classroom {
   roomType?: string;
   deviceType?: string;
   cameraIp: string;
-  rtspUrl: string;
+  rtspUrl?: string;
   cameraStatus: CameraStatus;
   latencyMs: number | null;
   fps: number;
@@ -159,6 +186,7 @@ export interface BiometricDetail {
     department: string;
     vectorId: number;
     masterImageUrl: string;
+    previewBase64?: string | null;
     aiModel: string;
     matchScore: number;
   };
@@ -256,8 +284,10 @@ export interface SessionDetail {
     status: AttendanceStatus;
     firstDetectedAt: string;
     matchPercentage: number;
-    avatarUrl: string;
+    avatarUrl?: string;
+    evidenceUrl?: string;
   }>;
+  unknownFaces?: Array<{ id: string; result: string; capturedAt: string; cropUrl?: string }>;
 }
 
 export interface SnapshotMilestone {
@@ -314,6 +344,25 @@ export interface StudentDashboardData {
     attendanceRate: number;
     status: "SAFE" | "WARNING" | "DANGER";
   }>;
+  weeklySchedule: Array<{
+    id: string;
+    sessionNumber: number;
+    sessionDate: string;
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+    periodStart?: number | null;
+    periodEnd?: number | null;
+    periodLabel?: string | null;
+    courseCode: string;
+    courseName: string;
+    classCode: string;
+    roomCode: string;
+    topic?: string | null;
+    status: string;
+  }>;
+  weekStart: string;
+  weekEnd: string;
 }
 
 // --- Student: Leave Request (§5.2.1 docs) ---
@@ -363,6 +412,7 @@ export const roleLabels: Record<Role, string> = {
 };
 
 export const statusLabels: Record<AttendanceStatus, string> = {
+  UNCONFIRMED: "Chưa xác định",
   PRESENT: "Đúng giờ",
   LATE: "Đi muộn",
   ABSENT: "Vắng mặt",
@@ -371,6 +421,7 @@ export const statusLabels: Record<AttendanceStatus, string> = {
 };
 
 export const statusColors: Record<AttendanceStatus, string> = {
+  UNCONFIRMED: "#64748b",
   PRESENT: "#10b981",
   LATE: "#d97706",
   ABSENT: "#dc2626",

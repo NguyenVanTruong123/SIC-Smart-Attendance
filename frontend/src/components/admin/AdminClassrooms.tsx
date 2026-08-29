@@ -151,8 +151,8 @@ export function AdminClassrooms() {
 
   // Ping camera ngoài bảng
   const { mutate: ping, isPending: pinging } = useMutation({
-    mutationFn: (rtspUrl: string) =>
-      api.post("/admin/classrooms/ping-camera", { rtspUrl }) as Promise<PingCameraResponse>,
+    mutationFn: (roomId: string) =>
+      api.post("/admin/classrooms/ping-camera", { roomId }) as Promise<PingCameraResponse>,
     onSuccess: (result) => {
       const res = result as unknown as PingCameraResponse;
       setPingResult(res);
@@ -251,13 +251,6 @@ export function AdminClassrooms() {
       render: (ip: string) => <code className="text-xs">{ip}</code>,
     },
     {
-      title: "RTSP URL",
-      dataIndex: "rtspUrl",
-      key: "rtspUrl",
-      ellipsis: true,
-      render: (url: string) => <code className="text-xs">{url}</code>,
-    },
-    {
       title: "Trạng thái",
       dataIndex: "cameraStatus",
       key: "cameraStatus",
@@ -287,7 +280,7 @@ export function AdminClassrooms() {
             />
           )}
           <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} />
-          <Button size="small" icon={<ApiOutlined />} onClick={() => ping(r.rtspUrl)} loading={pinging} />
+          <Button size="small" icon={<ApiOutlined />} onClick={() => ping(r.id)} loading={pinging} />
           <Button size="small" danger icon={<DeleteOutlined />} onClick={() => remove(r.id)} />
         </div>
       ),
@@ -677,11 +670,11 @@ export function AdminClassrooms() {
                   >
                     <span className="text-slate-300 font-medium">Độ trễ AI:</span>
                     <span style={{ color: "#34d399", fontFamily: "monospace", fontWeight: 700 }}>
-                      {detail.classroom.latencyMs || 118}ms
+                      {detail.classroom.latencyMs ?? "—"}{detail.classroom.latencyMs !== null ? "ms" : ""}
                     </span>
                     <span className="text-slate-500">|</span>
                     <span style={{ color: "#60a5fa", fontWeight: 600 }}>
-                      👥 {detail.todaySchedule[0]?.attendedCount || 44} SV
+                      👥 {detail.todaySchedule[0]?.attendedCount ?? 0} SV
                     </span>
                   </div>
 
@@ -703,7 +696,7 @@ export function AdminClassrooms() {
                       boxShadow: "0 4px 14px rgba(0,0,0,0.4)",
                     }}
                   >
-                    Đang phân tích: {detail.todaySchedule[0]?.attendedCount || 44}/{detail.todaySchedule[0]?.totalStudents || detail.classroom.capacity} Sinh viên khớp khuôn mặt ({Math.min(100, Math.round(((detail.todaySchedule[0]?.attendedCount || 44) / (detail.todaySchedule[0]?.totalStudents || detail.classroom.capacity)) * 100))}%)
+                    Đang phân tích: {detail.todaySchedule[0]?.attendedCount ?? 0}/{detail.todaySchedule[0]?.totalStudents ?? 0} Sinh viên khớp khuôn mặt ({detail.todaySchedule[0]?.totalStudents ? Math.min(100, Math.round(((detail.todaySchedule[0]?.attendedCount ?? 0) / detail.todaySchedule[0].totalStudents) * 100)) : 0}%)
                   </div>
                 </div>
 
@@ -727,7 +720,7 @@ export function AdminClassrooms() {
                         ĐỊA CHỈ LUỒNG
                       </div>
                       <div style={{ fontSize: 13, fontFamily: "monospace", color: "#1e293b", fontWeight: 600 }}>
-                        {detail.classroom.rtspUrl}
+                        Luồng camera được lưu bảo mật ở Backend
                       </div>
                     </div>
                   </div>
