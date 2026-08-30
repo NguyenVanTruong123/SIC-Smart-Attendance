@@ -38,6 +38,10 @@ export function TeacherScan({ initialSessionId }: { initialSessionId?: string })
   const queryClient = useQueryClient();
   const [actionLoading, setActionLoading] = useState(false);
 
+  useEffect(() => {
+    setSessionId(initialSessionId ?? "");
+  }, [initialSessionId]);
+
   const { data, isLoading, isError } = useQuery<SessionDetail>({
     queryKey: ["teacher-session", sessionId],
     queryFn: () => api.get(`/teacher/sessions/${sessionId}`) as Promise<SessionDetail>,

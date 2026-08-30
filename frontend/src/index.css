@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-:root { font-family: Inter, "Segoe UI", Arial, sans-serif; color: #1f2937; background: #f8fafc; font-synthesis: none; }
+:root { --portal-red: #a10000; --portal-red-hover: #7f0000; --portal-danger: #dc2626; --portal-danger-hover: #b91c1c; --portal-blue: #2563eb; font-family: Inter, "Segoe UI", Arial, sans-serif; color: #1f2937; background: #f8fafc; font-synthesis: none; }
 * { box-sizing: border-box; }
 body { min-width: 320px; min-height: 100vh; margin: 0; background: #f8fafc; }
 button, input, select, textarea { font: inherit; }
@@ -36,8 +36,18 @@ button, input, select, textarea { font: inherit; }
 .ant-card, .ant-table-wrapper .ant-table, .ant-alert { border-radius: 4px !important; }
 .ant-card { border-color: #dbe1e8 !important; box-shadow: none !important; }
 .ant-card:hover { box-shadow: 0 3px 10px rgba(31,41,55,.06) !important; }
+.portal-content .ant-btn-default { background: #fff !important; border-color: #cbd5e1 !important; color: #334155 !important; }
+.portal-content .ant-btn-default:hover { background: #eff6ff !important; border-color: #2563eb !important; color: #1d4ed8 !important; }
+.portal-content .ant-btn-text { color: #334155; }
+.portal-content .ant-btn-text:hover { background: #eff6ff !important; color: #1d4ed8 !important; }
 .ant-btn-primary { background: #a10000 !important; box-shadow: none !important; }
 .ant-btn-primary:hover { background: #7f0000 !important; }
+.ant-btn-primary:not(.ant-btn-dangerous) { border-color: var(--portal-red) !important; background: var(--portal-red) !important; }
+.ant-btn-primary:not(.ant-btn-dangerous):hover { border-color: var(--portal-red-hover) !important; background: var(--portal-red-hover) !important; }
+.ant-btn-primary.ant-btn-dangerous { border-color: var(--portal-danger) !important; background: var(--portal-danger) !important; color: #fff !important; }
+.ant-btn-primary.ant-btn-dangerous:hover { border-color: var(--portal-danger-hover) !important; background: var(--portal-danger-hover) !important; }
+.ant-btn-dangerous:not(.ant-btn-primary) { border-color: #fca5a5 !important; background: #fff !important; color: #b91c1c !important; }
+.ant-btn-dangerous:not(.ant-btn-primary):hover { border-color: var(--portal-danger) !important; background: #fff1f2 !important; color: #991b1b !important; }
 .portal-content .text-blue-500,
 .portal-content .text-blue-600,
 .portal-content .text-indigo-600 { color: #a10000 !important; }
@@ -73,6 +83,43 @@ button, input, select, textarea { font: inherit; }
 
 .login-error {
   margin-top: 16px;
+}
+
+.login-quick-accounts {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.login-quick-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.login-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.login-quick-account {
+  height: auto;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.login-quick-account > span {
+  display: grid;
+  gap: 2px;
+}
+
+.login-quick-account small {
+  color: #6b7280;
+  font-size: 11px;
 }
 
 .page-heading,
@@ -332,9 +379,22 @@ button, input, select, textarea { font: inherit; }
 }
 
 .student-calendar-actions {
+  align-items: center;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
+}
+
+.student-calendar-arrow {
+  border: 1px solid #cbd5e1 !important;
+  color: #334155 !important;
+  height: 32px;
+  width: 32px;
+}
+
+.student-calendar-arrow:hover {
+  background: #eff6ff !important;
+  border-color: #2563eb !important;
+  color: #1d4ed8 !important;
 }
 
 .student-calendar-range {
@@ -345,57 +405,90 @@ button, input, select, textarea { font: inherit; }
 
 .student-week-calendar {
   display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(7, minmax(130px, 1fr));
-  min-width: 910px;
+  grid-template-columns: minmax(112px, .8fr) repeat(7, minmax(142px, 1fr));
+  min-width: 1106px;
+  overflow: hidden;
+  border: 1px solid #dbe1e8;
+  border-radius: 4px;
 }
 
 .student-calendar-card .ant-card-body {
   overflow-x: auto;
 }
 
-.student-calendar-day {
-  background: #f8fafc;
-  border: 1px solid #e1e6ed;
-  min-height: 190px;
+.student-calendar-corner,
+.student-calendar-day-heading,
+.student-calendar-period,
+.student-calendar-slot {
+  border-right: 1px solid #e1e6ed;
+  border-bottom: 1px solid #e1e6ed;
 }
 
-.student-calendar-day.is-today {
-  border-color: var(--portal-red);
-  box-shadow: inset 0 3px 0 var(--portal-red);
+.student-calendar-corner {
+  align-items: center;
+  background: #f1f5f9;
+  color: #334155;
+  display: flex;
+  font-size: 12px;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 58px;
+  text-transform: uppercase;
 }
 
 .student-calendar-day-heading {
-  background: #f0f3f7;
-  border-bottom: 1px solid #e1e6ed;
+  background: #f8fafc;
   display: grid;
   gap: 2px;
+  min-height: 58px;
   padding: 9px 10px;
 }
 
-.student-calendar-day.is-today .student-calendar-day-heading {
-  background: #fff2f2;
+.student-calendar-day-heading.is-today {
+  background: #fff1f1;
+  box-shadow: inset 0 3px 0 var(--portal-red);
+  color: var(--portal-red);
 }
 
 .student-calendar-day-heading span,
-.student-calendar-empty {
+.student-calendar-period span {
   color: #7a8798;
   font-size: 12px;
 }
 
-.student-calendar-events {
+.student-calendar-period {
+  align-content: center;
+  background: #f0f3f7;
   display: grid;
-  gap: 8px;
+  gap: 2px;
+  min-height: 92px;
   padding: 8px;
+  text-align: center;
+}
+
+.student-calendar-slot {
+  background: #fff;
+  min-height: 92px;
+  padding: 7px;
+}
+
+.student-calendar-slot.is-today {
+  background: #fffaf5;
+}
+
+.student-calendar-slot:nth-child(8n),
+.student-calendar-day-heading:nth-child(8n) {
+  border-right: 0;
 }
 
 .student-calendar-event {
-  background: #fff;
-  border-left: 3px solid var(--portal-red);
+  background: #eff6ff;
+  border-left: 3px solid #2563eb;
   box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
   display: grid;
   gap: 3px;
-  padding: 8px;
+  min-height: 76px;
+  padding: 7px 8px;
 }
 
 .student-calendar-event > span,
@@ -651,6 +744,7 @@ button, input, select, textarea { font: inherit; }
   .course-session-meta { align-items: flex-start; text-align: left; }
   .teacher-session-actions { justify-content: flex-start; }
   .profile-summary { align-items: flex-start; }
+  .login-quick-grid { grid-template-columns: 1fr; }
   .portal-shell, .portal-shell.is-collapsed { grid-template-columns: 1fr; }
   .portal-sidebar { order: 2; border-top: 1px solid #dbe1e8; border-right: 0; }
   .portal-user-brief, .portal-sidebar-footer, .portal-nav-title { display: none; }
@@ -660,4 +754,390 @@ button, input, select, textarea { font: inherit; }
   .portal-header { position: static; padding: 0 18px; }
   .portal-content { padding: 20px; }
   .portal-collapse-button { display: none; }
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.portal-shell > *,
+.portal-app,
+.portal-content,
+.portal-content > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.portal-content img,
+.portal-content video,
+.portal-content canvas,
+.portal-content iframe {
+  max-width: 100%;
+}
+
+.portal-content .ant-card,
+.portal-content .ant-form,
+.portal-content .ant-table-wrapper,
+.portal-content .ant-alert,
+.portal-content .ant-space {
+  max-width: 100%;
+}
+
+.portal-content .ant-table-wrapper {
+  overflow-x: auto;
+}
+
+.portal-content .ant-table {
+  min-width: 640px;
+}
+
+.portal-content .ant-card-body,
+.portal-content .ant-card-head-wrapper,
+.page-heading > *,
+.course-session > * {
+  min-width: 0;
+}
+
+.portal-content .ant-card-head-wrapper {
+  gap: 12px;
+}
+
+.portal-content .ant-card-extra {
+  max-width: 100%;
+}
+
+.portal-content .ant-card-extra .ant-space,
+.portal-content .ant-card-extra .ant-input-affix-wrapper {
+  max-width: 100%;
+}
+
+.portal-content .ant-input,
+.portal-content .ant-input-affix-wrapper,
+.portal-content .ant-select,
+.portal-content .ant-picker,
+.portal-content .ant-input-number,
+.portal-content .ant-upload,
+.portal-content .ant-upload-wrapper {
+  max-width: 100%;
+}
+
+.ant-modal {
+  max-width: calc(100vw - 24px);
+  margin-inline: auto;
+}
+
+.ant-modal-content {
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+}
+
+@media (max-width: 1199px) {
+  .portal-shell {
+    grid-template-columns: 224px minmax(0, 1fr);
+  }
+
+  .portal-shell.is-collapsed {
+    grid-template-columns: 68px minmax(0, 1fr);
+  }
+
+  .portal-content {
+    padding: 24px;
+  }
+
+  .portal-user-brief {
+    padding-inline: 18px;
+  }
+
+  .portal-sidebar-footer {
+    padding-inline: 18px;
+  }
+
+  .dashboard-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-create-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scan-layout {
+    grid-template-columns: minmax(0, 1.25fr) minmax(260px, .75fr);
+  }
+}
+
+@media (max-width: 800px) {
+  .portal-shell,
+  .portal-shell.is-collapsed {
+    grid-template-columns: 208px minmax(0, 1fr);
+  }
+
+  .portal-sidebar {
+    order: initial;
+    min-height: 100vh;
+    border-top: 0;
+    border-right: 1px solid #dbe1e8;
+  }
+
+  .portal-user-brief,
+  .portal-nav-title {
+    display: flex;
+  }
+
+  .portal-sidebar-footer {
+    display: block;
+  }
+
+  .portal-navigation {
+    grid-template-columns: 1fr;
+    padding: 14px 10px;
+  }
+
+  .portal-collapse-button {
+    display: grid;
+  }
+
+  .portal-content {
+    padding: 18px 16px;
+  }
+
+  .portal-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .page-heading {
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .page-heading h1 {
+    font-size: 21px;
+  }
+
+  .page-heading .ant-space,
+  .page-heading .ant-btn,
+  .teacher-session-actions .ant-space,
+  .teacher-session-actions .ant-btn {
+    max-width: 100%;
+  }
+
+  .page-heading .ant-space,
+  .teacher-session-actions .ant-space {
+    flex-wrap: wrap;
+  }
+
+  .dashboard-metrics,
+  .admin-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-create-grid,
+  .scan-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-create-card .ant-card-body,
+  .scan-session-card .ant-card-body {
+    padding: 16px;
+  }
+
+  .student-calendar-actions {
+    flex-wrap: wrap;
+  }
+
+  .student-calendar-card .ant-card-head-wrapper {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .student-calendar-card .ant-card-extra {
+    width: 100%;
+  }
+
+  .student-calendar-actions {
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .scan-session-input,
+  .enrollment-actions {
+    width: 100%;
+  }
+
+  .scan-session-input > *,
+  .enrollment-actions > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .scan-session-input .ant-input,
+  .scan-session-input .ant-btn,
+  .enrollment-actions .ant-btn {
+    width: 100%;
+  }
+
+  .profile-summary {
+    flex-wrap: wrap;
+  }
+
+  .course-session-meta {
+    width: 100%;
+  }
+
+  .snapshot-list article {
+    width: min(160px, calc(50% - 7px));
+  }
+
+  .snapshot-list .ant-image,
+  .snapshot-list img {
+    width: 100%;
+  }
+}
+
+@media (max-width: 599px) {
+  .portal-shell,
+  .portal-shell.is-collapsed {
+    grid-template-columns: 68px minmax(0, 1fr);
+  }
+
+  .portal-user-brief,
+  .portal-sidebar-footer,
+  .portal-nav-title {
+    display: none;
+  }
+
+  .portal-navigation,
+  .portal-shell.is-collapsed .portal-navigation {
+    grid-template-columns: 1fr;
+    padding: 10px 8px;
+  }
+
+  .portal-nav-item,
+  .portal-shell.is-collapsed .portal-nav-item {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .portal-nav-item > span:not(.portal-nav-icon) {
+    display: none;
+  }
+
+  .portal-header {
+    grid-template-columns: 36px minmax(0, 1fr) 36px;
+    min-height: 56px;
+    padding-inline: 12px;
+  }
+
+  .portal-title {
+    font-size: 13px;
+  }
+
+  .portal-content {
+    padding: 14px 12px;
+  }
+
+  .portal-navigation {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    padding: 10px;
+  }
+
+  .portal-nav-item {
+    min-height: 40px;
+    padding: 9px 10px;
+    font-size: 13px;
+  }
+
+  .dashboard-metrics,
+  .admin-metrics,
+  .admin-create-grid,
+  .admin-create-inline-fields,
+  .scan-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-metric {
+    min-height: 96px;
+    padding: 16px;
+  }
+
+  .portal-metric strong {
+    font-size: 26px;
+  }
+
+  .portal-content .ant-card-head {
+    min-height: 48px;
+    padding-inline: 14px;
+  }
+
+  .portal-content .ant-card-body {
+    padding: 14px;
+  }
+
+  .student-calendar-actions {
+    justify-content: space-between;
+  }
+
+  .student-calendar-arrow {
+    flex: 0 0 32px;
+  }
+
+  .student-calendar-range {
+    margin-top: 0;
+  }
+
+  .enrollment-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .enrollment-actions .ant-btn {
+    margin-inline: 0;
+  }
+
+  .profile-summary .ant-image,
+  .profile-summary .ant-image img {
+    height: 64px;
+    width: 64px;
+  }
+
+  .snapshot-list article {
+    width: 100%;
+  }
+
+  .login-page {
+    padding: 12px;
+  }
+
+  .login-card {
+    padding: 24px 18px;
+  }
+
+  .ant-modal {
+    max-width: calc(100vw - 16px) !important;
+    margin: 8px auto !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .portal-navigation {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-nav-item {
+    justify-content: flex-start;
+  }
+
+  .student-calendar-actions {
+    justify-content: flex-start;
+  }
 }

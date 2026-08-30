@@ -44,7 +44,7 @@ const studentMenu: NavigationItem[] = [
   { key: "dashboard", icon: <DashboardOutlined />, label: "Trang chủ" },
   { key: "enrollment", icon: <CameraOutlined />, label: "Đăng ký khuôn mặt" },
   { key: "attendance", icon: <ScheduleOutlined />, label: "Kết quả điểm danh" },
-  { key: "profile", icon: <UserOutlined />, label: "Thông tin cá nhân" },
+  { key: "profile", icon: <UserOutlined />, label: "Hồ sơ tài khoản" },
 ];
 
 const teacherMenu: NavigationItem[] = [
@@ -70,18 +70,125 @@ const roleLabels: Record<string, string> = {
   STUDENT: "Sinh viên",
 };
 
+function defaultPageForRole(role: User["role"]): AnyPage {
+  return role === "TEACHER" ? "schedule" : "dashboard";
+}
+
+function pagePathForRole(role: User["role"], page: AnyPage, sessionId?: string) {
+  if (role === "STUDENT") {
+    const paths: Partial<Record<AnyPage, string>> = {
+      dashboard: "/student",
+      enrollment: "/student/enrollment",
+      attendance: "/student/attendance",
+      profile: "/student/profile",
+    };
+    return paths[page] ?? "/student";
+  }
+
+  if (role === "TEACHER") {
+    const paths: Partial<Record<AnyPage, string>> = {
+      schedule: "/teacher/schedule",
+      scan: "/teacher/attendance",
+      leave_requests: "/teacher/leave-requests",
+      reports: "/teacher/reports",
+      profile: "/teacher/profile",
+    };
+    const path = paths[page] ?? "/teacher/schedule";
+    return page === "scan" && sessionId ? `${path}/${encodeURIComponent(sessionId)}` : path;
+  }
+
+  const paths: Partial<Record<AnyPage, string>> = {
+    dashboard: "/admin",
+    biometrics: "/admin/biometrics",
+    classrooms: "/admin/classrooms",
+    classes: "/admin/classes",
+    audit: "/admin/audit",
+    profile: "/admin/profile",
+  };
+  return paths[page] ?? "/admin";
+}
+
+function routeForLocation(role: User["role"]): { page: AnyPage; sessionId?: string } {
+  if (typeof window === "undefined") return { page: defaultPageForRole(role) };
+
+  const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
+  if (role === "STUDENT") {
+    if (pathname === "/student/enrollment") return { page: "enrollment" };
+    if (pathname === "/student/attendance") return { page: "attendance" };
+    if (pathname === "/student/profile") return { page: "profile" };
+    return { page: "dashboard" };
+  }
+
+  if (role === "TEACHER") {
+    const attendancePath = "/teacher/attendance";
+    if (pathname === attendancePath || pathname.startsWith(`${attendancePath}/`)) {
+      const encodedSessionId = pathname.slice(attendancePath.length + 1);
+      let sessionId: string | undefined;
+      try {
+        sessionId = encodedSessionId ? decodeURIComponent(encodedSessionId) : undefined;
+      } catch {
+        sessionId = encodedSessionId || undefined;
+      }
+      return {
+        page: "scan",
+        sessionId,
+      };
+    }
+    if (pathname === "/teacher/leave-requests") return { page: "leave_requests" };
+    if (pathname === "/teacher/reports") return { page: "reports" };
+    if (pathname === "/teacher/profile") return { page: "profile" };
+    return { page: "schedule" };
+  }
+
+  if (pathname === "/admin/biometrics") return { page: "biometrics" };
+  if (pathname === "/admin/classrooms") return { page: "classrooms" };
+  if (pathname === "/admin/classes") return { page: "classes" };
+  if (pathname === "/admin/audit") return { page: "audit" };
+  if (pathname === "/admin/profile") return { page: "profile" };
+  return { page: "dashboard" };
+}
+
 function AppShell() {
   const { user, logout } = useAuthStore();
-  const [page, setPage] = useState<AnyPage>(user?.role === "TEACHER" ? "schedule" : "dashboard");
+  const role = user?.role ?? "STUDENT";
+  const initialRoute = routeForLocation(role);
+  const [page, setPage] = useState<AnyPage>(initialRoute.page);
   const [collapsed, setCollapsed] = useState(false);
-  const [selectedSession, setSelectedSession] = useState<string>();
+  const [selectedSession, setSelectedSession] = useState<string | undefined>(initialRoute.sessionId);
+
+  const navigate = (nextPage: AnyPage, sessionId?: string) => {
+    if (!user) return;
+    window.history.pushState({}, "", pagePathForRole(role, nextPage, sessionId));
+    setSelectedSession(sessionId);
+    setPage(nextPage);
+  };
+
+  useEffect(() => {
+    const syncRoute = () => {
+      const nextRoute = routeForLocation(role);
+      setPage(nextRoute.page);
+      setSelectedSession(nextRoute.sessionId);
+    };
+    window.addEventListener("popstate", syncRoute);
+    return () => window.removeEventListener("popstate", syncRoute);
+  }, [role]);
+
+  useEffect(() => {
+    if (!user) return;
+    const expectedPath = pagePathForRole(role, page, selectedSession);
+    if (window.location.pathname !== expectedPath) {
+      window.history.replaceState({}, "", expectedPath);
+    }
+  }, [role]);
 
   if (!user) return null;
 
-  const menuItems = user.role === "STUDENT" ? studentMenu : user.role === "TEACHER" ? teacherMenu : adminMenu;
+  const menuItems = role === "STUDENT" ? studentMenu : role === "TEACHER" ? teacherMenu : adminMenu;
+
   const handleLogout = () => {
     logout();
     queryClient.clear();
+    window.history.replaceState({}, "", "/login");
   };
 
   let content: React.ReactNode = null;
@@ -96,7 +203,7 @@ function AppShell() {
     switch (page) {
       case "schedule":
       case "dashboard":
-        content = <TeacherSchedule onStartScan={(sessionId) => { setSelectedSession(sessionId); setPage("scan"); }} />;
+        content = <TeacherSchedule onStartScan={(sessionId) => navigate("scan", sessionId)} />;
         break;
       case "scan": content = <TeacherScan initialSessionId={selectedSession} />; break;
       case "leave_requests": content = <TeacherLeaveRequests />; break;
@@ -134,7 +241,7 @@ function AppShell() {
               type="button"
               className={`portal-nav-item ${page === item.key ? "is-active" : ""}`}
               aria-current={page === item.key ? "page" : undefined}
-              onClick={() => setPage(item.key)}
+              onClick={() => navigate(item.key)}
             >
               <span className="portal-nav-icon" aria-hidden="true">{item.icon}</span>
               {!collapsed && <span>{item.label}</span>}
@@ -158,7 +265,7 @@ function AppShell() {
           <Dropdown
             menu={{
               items: [
-                { key: "profile", icon: <UserOutlined />, label: "Tài khoản cá nhân", onClick: () => setPage("profile") },
+                { key: "profile", icon: <UserOutlined />, label: "Tài khoản cá nhân", onClick: () => navigate("profile") },
                 { type: "divider" },
                 { key: "logout", icon: <LogoutOutlined />, label: "Đăng xuất", danger: true, onClick: handleLogout },
               ],
