@@ -9,8 +9,8 @@ export function Profile() {
     <section aria-labelledby="profile-title">
       <div className="page-heading">
         <div>
-          <h1 id="profile-title">Tài khoản cá nhân</h1>
-          <p>Thông tin tài khoản được nhà trường quản lý.</p>
+          <h1 id="profile-title">Hồ sơ tài khoản</h1>
+          <p>Thông tin tài khoản và trạng thái đăng ký khuôn mặt của bạn.</p>
         </div>
       </div>
       <Card className="portal-card profile-card">

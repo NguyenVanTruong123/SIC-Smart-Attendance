@@ -73,3 +73,9 @@ export function periodLabel(periodStart?: number | null, periodEnd?: number | nu
   if (!periodStart || !periodEnd) return null;
   return periodStart === periodEnd ? `Ca ${periodStart}` : `Ca ${periodStart}–${periodEnd}`;
 }
+
+export function periodFromClock(time?: string | null) {
+  if (!time) return null;
+  const normalizedTime = time.length >= 5 ? time.slice(0, 5) : time;
+  return STUDY_PERIODS.find((period) => period.startTime === normalizedTime || period.endTime === normalizedTime)?.number ?? null;
+}

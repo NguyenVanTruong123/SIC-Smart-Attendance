@@ -1,7 +1,7 @@
 import { NextFunction, Response } from 'express';
 import { AttendanceStatus } from '@prisma/client';
 import { AuthenticatedRequest } from '../middlewares/auth.middlewares';
-import { teacherSessionService } from '../services/teacher-session.service';
+import { isCaptureMode, teacherSessionService } from '../services/teacher-session.service';
 
 export class TeacherSessionController {
   async get(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -11,7 +11,18 @@ export class TeacherSessionController {
     try { return res.json({ success: true, data: await teacherSessionService.start(req.params.id, req.user!.userId, req.user!.role) }); } catch (error) { next(error); }
   }
   async capture(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-    try { return res.json({ success: true, data: await teacherSessionService.capture(req.params.id, req.user!.userId, req.user!.role) }); } catch (error) { next(error); }
+    try {
+      const mode = isCaptureMode(req.body?.mode) ? req.body.mode : 'CHECKPOINT';
+      const data = req.file
+        ? await teacherSessionService.captureImage(req.params.id, req.user!.userId, req.user!.role, req.file, mode)
+        : await teacherSessionService.capture(req.params.id, req.user!.userId, req.user!.role, mode);
+      return res.json({ success: true, data });
+    } catch (error) { next(error); }
+  }
+  async resolve(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      return res.json({ success: true, data: await teacherSessionService.resolveByCourseCode(String(req.query.courseCode || ''), req.user!.userId, req.user!.role) });
+    } catch (error) { next(error); }
   }
   async override(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {

@@ -1,7 +1,6 @@
 import { Alert, Card, Descriptions, Image, Result, Spin, Tag, Typography } from "antd";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/authStore";
-import { useEffect, useState } from "react";
 import api from "@/utils/api";
 import type { StudentBiometricProfileData } from "@/types";
 
@@ -11,21 +10,10 @@ function formatDate(value: string | null | undefined) {
 
 export function StudentBiometricProfile() {
   const user = useAuthStore((state) => state.user)!;
-  const [enrollmentPreview, setEnrollmentPreview] = useState<string>();
   const { data, isLoading, isError } = useQuery<StudentBiometricProfileData>({
     queryKey: ["student-biometric-profile"],
     queryFn: () => api.get("/student/biometric-profile") as Promise<StudentBiometricProfileData>,
   });
-
-  useEffect(() => {
-    if (!data?.previewUrl) return;
-    let objectUrl: string | undefined;
-    void api.get("/student/face-preview", { responseType: "blob" }).then((blob) => {
-      objectUrl = URL.createObjectURL(blob as unknown as Blob);
-      setEnrollmentPreview(objectUrl);
-    }).catch(() => undefined);
-    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [data?.previewUrl]);
 
   if (isLoading) return <div className="portal-loading"><Spin /></div>;
   if (isError || !data) {
@@ -34,17 +22,18 @@ export function StudentBiometricProfile() {
 
   const biometric = data.biometric;
   const enrolled = data.status === "ENROLLED";
+  const enrollmentImages = data.enrollmentImages ?? [];
 
   return (
     <section aria-labelledby="biometric-profile-title">
       <div className="page-heading">
         <div>
-          <h1 id="biometric-profile-title">Định danh khuôn mặt</h1>
-          <p>Thông tin vector dùng để đối chiếu điểm danh của chính tài khoản này.</p>
+          <h1 id="biometric-profile-title">Hồ sơ tài khoản</h1>
+          <p>Thông tin tài khoản và dữ liệu khuôn mặt dùng để đối chiếu điểm danh.</p>
         </div>
         <Tag color={enrolled ? "success" : "warning"}>{enrolled ? "Đã đăng ký" : "Chưa đăng ký"}</Tag>
       </div>
-      <Card className="portal-card" title="Hồ sơ sinh trắc học">
+      <Card className="portal-card" title="Thông tin tài khoản & khuôn mặt">
         <Descriptions bordered column={{ xs: 1, sm: 2 }}>
           <Descriptions.Item label="MSSV">{data.student.userCode || user.userCode}</Descriptions.Item>
           <Descriptions.Item label="Họ và tên">{data.student.fullName || user.fullName}</Descriptions.Item>
@@ -57,8 +46,17 @@ export function StudentBiometricProfile() {
           <Descriptions.Item label="Kích thước vector">{biometric?.embeddingDimension ? `${biometric.embeddingDimension}D` : "—"}</Descriptions.Item>
           <Descriptions.Item label="Ngày đăng ký">{formatDate(biometric?.enrolledAt)}</Descriptions.Item>
           <Descriptions.Item label="Ảnh enrollment" span={2}>
-            {enrollmentPreview ? (
-              <Image src={enrollmentPreview} width={180} style={{ borderRadius: 8 }} alt="Ảnh khuôn mặt đã đăng ký" />
+            {enrollmentImages.length ? (
+              <Image.PreviewGroup>
+                <div className="flex flex-wrap gap-3">
+                  {enrollmentImages.map((image) => (
+                    <div key={image.id} className="flex flex-col gap-1">
+                      <Image src={image.previewBase64} width={140} style={{ borderRadius: 8 }} alt={`Ảnh enrollment ${image.imageIndex}`} />
+                      <small>{image.pose === "left" ? "Quay trái" : image.pose === "right" ? "Quay phải" : "Nhìn thẳng"} · Ảnh {image.imageIndex}</small>
+                    </div>
+                  ))}
+                </div>
+              </Image.PreviewGroup>
             ) : (
               <Result status="info" title="Chưa có ảnh enrollment" subTitle="Hoàn tất đăng ký khuôn mặt để hiển thị ảnh định danh." />
             )}

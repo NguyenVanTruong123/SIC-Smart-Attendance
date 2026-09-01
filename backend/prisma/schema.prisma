@@ -119,6 +119,7 @@ model User {
   leaveRequests         LeaveRequest[]           @relation("StudentLeaveRequests")
   reviewedLeaves        LeaveRequest[]           @relation("ReviewerLeaveRequests")
   biometricProfile      UserBiometric?
+  enrollmentImages      UserEnrollmentImage[]
   biometricRequests     BiometricUpdateRequest[] @relation("UserBiometricRequests")
   reviewedBioRequests   BiometricUpdateRequest[] @relation("AdminReviewedBioRequests")
   auditActions          SystemAuditLog[]         @relation("ActorAuditLogs")
@@ -359,6 +360,22 @@ model LeaveRequest {
 // ----------------------------------------------------------------------------
 // 10. USER_BIOMETRICS TABLE (Kho Vector & FAISS Map)
 // ----------------------------------------------------------------------------
+model UserEnrollmentImage {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  imageIndex  Int      @map("image_index")
+  imageUrl    String   @map("image_url") @db.VarChar(500)
+  mimeType    String   @map("mime_type") @db.VarChar(50)
+  pose        String?  @db.VarChar(20)
+  capturedAt  DateTime @default(now()) @map("captured_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, imageIndex])
+  @@index([userId])
+  @@map("user_enrollment_images")
+}
+
 model UserBiometric {
   id                 String    @id @default(uuid()) @db.Uuid
   userId             String    @unique @map("user_id") @db.Uuid

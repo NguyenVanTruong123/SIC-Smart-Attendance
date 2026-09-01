@@ -14,6 +14,9 @@ export class BiometricController {
 
   async resetBiometric(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(req.params.userId)) {
+        throw Object.assign(new Error('Mã người dùng không hợp lệ.'), { statusCode: 400 });
+      }
       const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
       if (!reason) throw Object.assign(new Error('Lý do reset khuôn mặt là bắt buộc.'), { statusCode: 422 });
       return res.json({ success: true, data: await biometricService.resetBiometric(req.params.userId, req.user!.userId, reason) });

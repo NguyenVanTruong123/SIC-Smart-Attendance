@@ -32,13 +32,19 @@ services:
       AI_SERVICE_URL: http://ai-service:8000
       AI_SERVICE_KEY: ${AI_SERVICE_KEY:-spas_internal_ai_secret_key_2026}
       EVIDENCE_STORAGE_DIR: /app/storage/evidence
+      DEMO_MODE: ${DEMO_MODE:-true}
+      LATE_CUTOFF_MINUTES: ${LATE_CUTOFF_MINUTES:-1}
+      AI_CAPTURE_INTERVAL_MS: ${AI_CAPTURE_INTERVAL_MS:-900000}
     depends_on: [postgres, ai-service]
     volumes: ["./runtime/evidence:/app/storage/evidence"]
     expose: ["5000"]
 
   frontend:
-    build: ./frontend
-    ports: ["80:80"]
+    build:
+      context: ./frontend
+      args:
+        VITE_ENABLE_DEMO_ACCOUNTS: ${VITE_ENABLE_DEMO_ACCOUNTS:-true}
+    ports: ["8600:80"]
     depends_on: [backend]
 
 volumes:

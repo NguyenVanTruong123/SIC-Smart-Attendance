@@ -3,6 +3,14 @@ import prisma from '../config/prisma';
 import { aiClientService } from './ai-client.service';
 import { evidenceService } from './evidence.service';
 
+function inferPose(filename: string) {
+  const normalized = filename.toLowerCase();
+  if (normalized.includes('left')) return 'left';
+  if (normalized.includes('right')) return 'right';
+  if (normalized.includes('front')) return 'front';
+  return null;
+}
+
 export class EkycService {
   async enrollInitial(userId: string, frames: Express.Multer.File[]) {
     if (frames.length < 3) {
@@ -24,8 +32,20 @@ export class EkycService {
     }
 
     const enrollment = await aiClientService.enroll(user.userCode, frames);
-    const previewFilename = await evidenceService.saveBase64Jpeg(enrollment.preview);
+    const savedImages: Array<{ imageUrl: string; mimeType: string; imageIndex: number; pose: string | null }> = [];
+
     try {
+      for (const [index, frame] of frames.entries()) {
+        const extension = frame.mimetype === 'image/png' ? 'png' : 'jpg';
+        const imageUrl = await evidenceService.saveBuffer(frame.buffer, extension);
+        savedImages.push({
+          imageUrl,
+          mimeType: frame.mimetype,
+          imageIndex: index + 1,
+          pose: inferPose(frame.originalname),
+        });
+      }
+
       await prisma.$transaction(async (tx) => {
         await tx.user.update({ where: { id: user.id }, data: { isFaceEnrolled: true } });
         await tx.userBiometric.upsert({
@@ -35,23 +55,38 @@ export class EkycService {
             lastEnrolledAt: new Date(),
             modelVersion: 'facenet-512d',
             embeddingDimension: enrollment.embeddingDimension,
-            enrolledFaceUrl: previewFilename,
+            enrolledFaceUrl: savedImages[0]?.imageUrl || null,
           },
           update: {
             lastEnrolledAt: new Date(),
             modelVersion: 'facenet-512d',
             embeddingDimension: enrollment.embeddingDimension,
-            enrolledFaceUrl: previewFilename,
+            enrolledFaceUrl: savedImages[0]?.imageUrl || null,
             enrollmentVersion: { increment: 1 },
           },
         });
+        await tx.userEnrollmentImage.deleteMany({ where: { userId: user.id } });
+        await tx.userEnrollmentImage.createMany({
+          data: savedImages.map((image) => ({
+            userId: user.id,
+            imageIndex: image.imageIndex,
+            imageUrl: image.imageUrl,
+            mimeType: image.mimeType,
+            pose: image.pose,
+          })),
+        });
       });
     } catch (error) {
+      await Promise.all(savedImages.map((image) => evidenceService.delete(image.imageUrl)));
       await aiClientService.resetEnrollment(user.userCode).catch(() => undefined);
       throw error;
     }
 
-    return { isFaceEnrolled: true, acceptedFrames: enrollment.acceptedFrames };
+    return {
+      isFaceEnrolled: true,
+      acceptedFrames: enrollment.acceptedFrames,
+      savedOriginalFrames: savedImages.length,
+    };
   }
 }
 

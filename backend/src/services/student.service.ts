@@ -1,7 +1,7 @@
 import { LeaveRequestType, RequestStatus } from '@prisma/client';
 import prisma from '../config/prisma';
 import { evidenceService } from './evidence.service';
-import { periodLabel } from '../utils/study-periods';
+import { periodFromClock, periodLabel } from '../utils/study-periods';
 
 function serviceError(message: string, statusCode: number) {
   return Object.assign(new Error(message), { statusCode });
@@ -62,16 +62,20 @@ export class StudentService {
     const weeklySchedule = weeklySessions.map((session) => {
       const sessionDate = new Date(session.sessionDate);
       const weekday = sessionDate.getUTCDay() === 0 ? 7 : sessionDate.getUTCDay();
+      const startTime = clock(new Date(session.startTime));
+      const endTime = clock(new Date(session.endTime));
+      const periodStart = session.periodStart ?? periodFromClock(startTime);
+      const periodEnd = session.periodEnd ?? periodFromClock(endTime);
       return {
         id: session.id,
         sessionNumber: session.sessionNumber,
         sessionDate: sessionDate.toISOString().slice(0, 10),
         dayOfWeek: weekday,
-        startTime: clock(new Date(session.startTime)),
-        endTime: clock(new Date(session.endTime)),
-        periodStart: session.periodStart,
-        periodEnd: session.periodEnd,
-        periodLabel: periodLabel(session.periodStart, session.periodEnd),
+        startTime,
+        endTime,
+        periodStart,
+        periodEnd,
+        periodLabel: periodLabel(periodStart, periodEnd),
         courseCode: session.courseClass.course.courseCode,
         courseName: session.courseClass.course.courseName,
         classCode: session.courseClass.classCode,
@@ -123,8 +127,10 @@ export class StudentService {
       status: record.status,
       lateMinutes: record.lateMinutes,
       firstSeenAt: record.firstSeenAt,
+      date: record.session.sessionDate.toISOString().slice(0, 10),
       sessionDate: record.session.sessionDate,
-      startTime: record.session.startTime,
+      startTime: clock(record.session.startTime),
+      endTime: clock(record.session.endTime),
       courseCode: record.session.courseClass.course.courseCode,
       courseName: record.session.courseClass.course.courseName,
       roomCode: record.session.classroom.roomCode,
@@ -158,6 +164,10 @@ export class StudentService {
         department: true,
         className: true,
         isFaceEnrolled: true,
+        enrollmentImages: {
+          orderBy: { imageIndex: 'asc' },
+          select: { id: true, imageIndex: true, imageUrl: true, mimeType: true, pose: true },
+        },
         biometricProfile: {
           select: {
             faissVectorId: true,
@@ -174,6 +184,20 @@ export class StudentService {
     if (!user) throw serviceError('Không tìm thấy tài khoản sinh viên.', 404);
 
     const profile = user.biometricProfile;
+    const enrollmentImages = user.enrollmentImages
+      ? (await Promise.all(user.enrollmentImages.map(async (image) => {
+          try {
+            return {
+              id: image.id,
+              imageIndex: image.imageIndex,
+              pose: image.pose,
+              previewBase64: await evidenceService.readDataUrl(image.imageUrl, image.mimeType),
+            };
+          } catch {
+            return null;
+          }
+        }))).filter((image): image is NonNullable<typeof image> => image !== null)
+      : [];
     return {
       student: {
         id: user.id,
@@ -194,6 +218,7 @@ export class StudentService {
           }
         : null,
       previewUrl: profile?.enrolledFaceUrl ? '/api/v1/student/face-preview' : null,
+      enrollmentImages,
     };
   }
 

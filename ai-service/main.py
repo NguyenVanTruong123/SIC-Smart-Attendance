@@ -361,7 +361,14 @@ def recognize_frame(session_id: str, frame: np.ndarray) -> dict:
         if result == "MATCHED":
             payload["studentId"] = roster.student_ids[winner_index]
         results.append(payload)
-    return {"sessionId": session_id, "rosterVersion": roster.version, "faces": results}
+    return {
+        "sessionId": session_id,
+        "rosterVersion": roster.version,
+        "faces": results,
+        "framePreview": base64_jpeg(frame),
+        "frameWidth": int(frame.shape[1]),
+        "frameHeight": int(frame.shape[0]),
+    }
 
 
 @app.post("/internal/v1/attendance-sessions/{session_id}/recognitions", dependencies=[Depends(require_internal_key)])

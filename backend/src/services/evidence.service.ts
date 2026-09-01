@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
@@ -25,6 +25,19 @@ export class EvidenceService {
 
   async read(filename: string) {
     return readFile(this.getPath(filename));
+  }
+
+  async readDataUrl(filename: string, mimeType = 'image/jpeg') {
+    const buffer = await this.read(filename);
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+  }
+
+  async delete(filename: string) {
+    try {
+      await unlink(this.getPath(filename));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
   }
 }
 

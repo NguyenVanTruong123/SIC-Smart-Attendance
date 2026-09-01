@@ -71,6 +71,14 @@ export interface EkycEnrollResponse {
   matchScore: number;
   isFaceEnrolled: boolean;
   redirectUrl: string;
+  savedOriginalFrames?: number;
+}
+
+export interface EnrollmentImage {
+  id: string;
+  imageIndex: number;
+  pose: string | null;
+  previewBase64: string;
 }
 
 export interface StudentBiometricProfileData {
@@ -91,6 +99,7 @@ export interface StudentBiometricProfileData {
     enrolledAt: string | null;
   } | null;
   previewUrl: string | null;
+  enrollmentImages: EnrollmentImage[];
 }
 
 export interface PoseDetection {
@@ -187,6 +196,7 @@ export interface BiometricDetail {
     vectorId: number;
     masterImageUrl: string;
     previewBase64?: string | null;
+    enrollmentImages: EnrollmentImage[];
     aiModel: string;
     matchScore: number;
   };
@@ -267,6 +277,7 @@ export interface SessionDetail {
     className: string;
     roomCode: string;
     rtspStreamUrl: string;
+    cameraMode?: "BROWSER" | "RTSP";
     fps: number;
     status: SessionStatus;
   };
@@ -365,6 +376,18 @@ export interface StudentDashboardData {
   weekEnd: string;
 }
 
+export interface TeacherSessionLookup {
+  id: string;
+  courseCode: string;
+  courseName: string;
+  classCode: string;
+  sessionDate: string;
+  sessionNumber: number;
+  roomCode: string;
+  status: SessionStatus;
+  cameraMode: "BROWSER" | "RTSP";
+}
+
 // --- Student: Leave Request (§5.2.1 docs) ---
 export interface LeaveRequestData {
   requestId: string;
@@ -376,7 +399,24 @@ export interface WsFaceDetected {
   studentCode: string;
   fullName: string;
   matchPercentage: number;
-  boundingBox: { x: number; y: number; w: number; h: number };
+  boundingBox: { x: number; y: number; width: number; height: number };
+  capturedAt?: string;
+}
+
+export interface WsFrameCapturedFace {
+  result: "MATCHED" | "UNKNOWN_PERSON" | "AMBIGUOUS";
+  studentCode?: string;
+  fullName?: string;
+  score: number;
+  bbox: { x: number; y: number; width: number; height: number };
+}
+
+export interface WsFrameCaptured {
+  capturedAt: string;
+  framePreview?: string;
+  frameWidth?: number;
+  frameHeight?: number;
+  faces: WsFrameCapturedFace[];
 }
 
 export interface WsStatUpdate {

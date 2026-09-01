@@ -78,6 +78,31 @@ Hệ thống sử dụng **JWT (JSON Web Token)** với cơ chế **Role-Based A
 
 ---
 
+### 1.5. Đối chiếu API doc với implementation hiện tại (2026-08-30)
+
+> Phần này được thêm để tránh nhầm giữa đặc tả BA/API v6.0 và contract đang chạy trong working tree. Khi hai phần khác nhau, Backend và Frontend cần ưu tiên bảng này trong MVP; các endpoint được đánh dấu **chưa triển khai** không được gọi từ UI.
+
+| Khu vực | API doc/BA ban đầu | Implementation hiện tại | Lý do và hướng xử lý |
+| :--- | :--- | :--- | :--- |
+| Base URL | Ghi đầy đủ `http://localhost:5000/api/v1` | Backend mount toàn bộ module dưới `/api/v1`; Frontend Axios dùng `baseURL: /api/v1` | FE gọi relative path để chạy được qua Vite/Nginx/Cloudflare mà không hard-code host hoặc port. |
+| Response | Ví dụ luôn có `success`, `statusCode`, `message`, `data`, `meta` | Các controller tối thiểu luôn có `success` và `data`; một số endpoint có thêm `statusCode`, `message`, `timestamp`; Axios tự unwrap `data` | Không đổi nghiệp vụ; khi hoàn thiện production cần thống nhất envelope đầy đủ hoặc cập nhật type theo endpoint thực tế. |
+| Student dashboard | `GET /api/v1/student/dashboard` không mô tả tham số tuần | Có thêm `weekStart=YYYY-MM-DD`, trả `weeklySchedule` kèm `periodStart`, `periodEnd`, `periodLabel` | Calendar mới cần tải đúng tuần và dựng hàng theo ca học; không cần đổi database/API route. |
+| Teacher schedule | Doc minh họa query `week`, `year` | Controller hiện hỗ trợ `startDate`, `endDate`; `week`, `year` mới chỉ được đọc nhưng chưa dùng để tính khoảng ngày | Cần dùng `startDate/endDate` ở FE hiện tại; nếu muốn giữ contract BA thì BE phải bổ sung mapping `week/year` ở task sau. |
+| Teacher snapshots | Doc có `GET /api/v1/teacher/sessions/{id}/snapshots` | Chưa có route GET riêng; hiện có `POST /sessions/{id}/trigger-snapshot`, session detail và evidence | Không để FE gọi endpoint ảo; thêm route snapshots khi cần xem lịch sử milestone đầy đủ. |
+| eKYC enrollment | Doc cũ mô tả `video_file` 3 giây | `POST /api/v1/ekyc/enroll-initial` nhận `frames[]` (3–12 ảnh), lưu toàn bộ frame gốc; `POST /api/v1/ekyc/pose` kiểm tra từng frame | Flow thực tế của FE là tracking 3 pose rồi chụp 8 ảnh; frames phù hợp hơn video đơn vì cần lưu evidence và retry từng pose. |
+| AI public endpoints | Doc có `/api/check-enrollment`, `/api/enroll`, `/api/recognize` | Không mount các route AI này ở Gateway; BE gọi AI nội bộ qua `AI_SERVICE_URL` và `x-ai-service-key` tại `/internal/v1/*` | Giữ credential/RTSP/AI service ở server, không đưa lên browser. FE chỉ gọi Gateway. |
+| AI enrollment | Doc trả `vectorId`, `matchScore`, `redirectUrl` | AI client trả `acceptedFrames`, `embeddingDimension`, `preview`; BE trả `isFaceEnrolled`, `acceptedFrames`, `savedOriginalFrames` | Không trả embedding thô cho client; metadata vector được lưu và quản lý phía server. |
+| Re-eKYC | Doc có submit/review comparison | Chưa có route tương ứng trong `backend/src/routes/student.routes.ts` và `admin.routes.ts` | Đây là phạm vi sau MVP; UI không được coi là đã hoạt động chỉ vì type/Mock đã tồn tại. |
+
+#### Quy ước tích hợp hiện tại
+
+- Frontend chỉ gọi các route Gateway qua `frontend/src/utils/api.ts`; không gọi thẳng Python AI service.
+- Gateway chịu trách nhiệm JWT/RBAC, kiểm tra sinh viên thuộc lớp, quy tắc điểm danh, lưu evidence và audit; AI chỉ trả detection/identity/score/pose/evidence.
+- `POST /api/v1/teacher/sessions/{id}/trigger-snapshot` là API điều khiển nghiệp vụ; việc gọi AI nội bộ và ghi nhận kết quả do Backend thực hiện.
+- Port `5000`, `8000`, `5173` chỉ là mặc định local; không được đưa port cố định vào payload hoặc lưu trong frontend production.
+
+---
+
 ## 🔐 2. MODULE 1: AUTHENTICATION & eKYC ONBOARDING (`/api/v1/auth`, `/api/v1/ekyc`)
 
 ### 2.1. Đăng Nhập Hệ Thống (Login with RBAC)
@@ -113,29 +138,29 @@ Hệ thống sử dụng **JWT (JSON Web Token)** với cơ chế **Role-Based A
 
 ---
 
-### 2.2. Quay Video 3s Xác Thực eKYC Lần Đầu (Onboarding Lock Wizard - `/student/onboarding-ekyc`)
+### 2.2. Enrollment nhiều frame theo pose (Onboarding Lock Wizard - `/student/enrollment`)
 * **Endpoint:** `POST /api/v1/ekyc/enroll-initial` | **Auth:** `STUDENT`
 * **Content-Type:** `multipart/form-data`
-* **Form Data:** `video_file`: File Video `.mp4` / `.webm` (Quay 3 giây, $\ge 720p$).
+* **Form Data:** `frames`: nhiều file ảnh JPEG/PNG, tối thiểu 3 và tối đa 12; bản Frontend hiện tại gửi 8 frame theo các pose `front`, `left`, `right`.
 * **Xử lý Backend:**
-  1. Gửi video sang Python AI Microservice kiểm tra Silent-Face-Anti-Spoofing.
-  2. Trích xuất khung hình chân dung nét nhất và sinh 512D ArcFace Vector.
-  3. Lưu Vector vào FAISS Vector Database (`vectors.index`) và lưu ảnh vào Cloudinary/S3.
-  4. Cập nhật `users.is_face_enrolled = true`.
-* **Success Response (200 OK):**
+  1. Gửi frames sang AI service nội bộ để trích xuất embedding và kiểm tra frame hợp lệ.
+  2. Lưu vector/metadata ở AI service và lưu toàn bộ bytes ảnh gốc ở Backend storage.
+  3. Cập nhật `users.is_face_enrolled = true` và tạo các bản ghi `user_enrollment_images`.
+  4. Từ chối lần đăng ký tiếp theo nếu chưa có quyền reset của Admin.
+* **Success Response (201 Created):**
 ```json
 {
   "success": true,
-  "statusCode": 200,
-  "message": "Xác thực khuôn mặt lần đầu thành công",
+  "statusCode": 201,
   "data": {
-    "vectorId": 512,
-    "matchScore": 98.5,
     "isFaceEnrolled": true,
-    "redirectUrl": "/student/dashboard"
+    "acceptedFrames": 8,
+    "savedOriginalFrames": 8
   }
 }
 ```
+
+`POST /api/v1/ekyc/pose` nhận một field `frame` và trả `pose`, `confidence`, `faceCount`, `bbox`; Frontend dùng endpoint này để chỉ chụp khi người dùng đang ở đúng hướng.
 
 ---
 
@@ -880,14 +905,30 @@ Hệ thống sử dụng **JWT (JSON Web Token)** với cơ chế **Role-Based A
       "enrollmentVersion": 1,
       "enrolledAt": "2026-08-29T08:00:00.000Z"
     },
-    "previewUrl": "/api/v1/student/face-preview"
+    "previewUrl": "/api/v1/student/face-preview",
+    "enrollmentImages": [
+      {
+        "id": "img_01",
+        "imageIndex": 1,
+        "pose": "front",
+        "previewBase64": "data:image/jpeg;base64,/9j/..."
+      },
+      {
+        "id": "img_02",
+        "imageIndex": 2,
+        "pose": "left",
+        "previewBase64": "data:image/jpeg;base64,/9j/..."
+      }
+    ]
   }
 }
 ```
 
+`enrollmentImages` chứa toàn bộ frame gốc đã gửi khi enrollment (thường 8, tối đa 12), không phải ảnh crop duy nhất. `previewUrl` vẫn giữ để tương thích và trả ảnh đầu tiên.
+
 ### 5.1.2. Xem ảnh enrollment sau khi đăng ký (`/student/face-preview`)
 * **Endpoint:** `GET /api/v1/student/face-preview` | **Auth:** `STUDENT`
-* **Mục đích:** Trả ảnh enrollment đã crop để sinh viên tự đối chiếu.
+* **Mục đích:** Trả ảnh gốc enrollment đầu tiên để tương thích với client cũ; danh sách đầy đủ nằm trong `enrollmentImages` của `/student/biometric-profile`.
 * **Response:** `image/jpeg` binary. Frontend phải gọi bằng Axios/Bearer token, không dùng thẻ `<img>` trực tiếp với URL protected.
 * **Phân quyền:** Chỉ trả ảnh của `req.user.userId`; chưa có ảnh trả `404`.
 
@@ -1171,5 +1212,64 @@ sequenceDiagram
 ```
 
 ---
-*Tài liệu Đặc tả API v6.0 Final hoàn chỉnh 100%, chuẩn RESTful, WebSocket & Python AI Microservice.*
+### 7.4. AI MVP demo contract — current implementation
+
+Phần này là contract đang dùng trong code hiện tại; các endpoint cũ ở mục 7.2 chỉ giữ để tham khảo lịch sử.
+
+| Endpoint nội bộ | Mục đích |
+|---|---|
+| `POST /internal/v1/pose` | Kiểm tra frame enrollment có đúng một mặt và pose `front/left/right`. |
+| `POST /internal/v1/enrollments` | Nhận `student_id` và nhiều file `frames`; tạo vector 512D từ các frame hợp lệ. |
+| `PUT /internal/v1/attendance-sessions/{session_id}/roster` | Nạp roster chỉ gồm sinh viên của session. |
+| `POST /internal/v1/attendance-sessions/{session_id}/recognitions` | Nhận diện từ một ảnh upload. |
+| `POST /internal/v1/attendance-sessions/{session_id}/capture` | Đọc một frame từ RTSP rồi nhận diện ngay. |
+| `DELETE /internal/v1/attendance-sessions/{session_id}/roster` | Gỡ roster khi kết thúc session. |
+
+Các endpoint nội bộ bắt buộc header `x-ai-service-key` và chỉ Backend được gọi. Frontend không gọi trực tiếp AI.
+
+Recognition response hiện trả thêm:
+
+```json
+{
+  "framePreview": "base64-jpeg-without-data-prefix",
+  "frameWidth": 1280,
+  "frameHeight": 720,
+  "faces": [
+    {
+      "result": "MATCHED",
+      "studentId": "SV001",
+      "score": 0.82,
+      "bbox": { "x": 220, "y": 100, "width": 160, "height": 190 }
+    }
+  ]
+}
+```
+
+Backend phát event Socket.IO `attendance:frame_captured` để FE hiển thị frame và vẽ BBox. Màu xanh là `MATCHED`; màu đỏ là `UNKNOWN_PERSON` hoặc `AMBIGUOUS`.
+
+### 7.5. Demo timing
+
+Local Docker mặc định dùng `DEMO_MODE=true`, `LATE_CUTOFF_MINUTES=1` và `AI_CAPTURE_INTERVAL_MS=3000`. Nút điểm danh gọi capture ngay; không chờ đến giờ lịch. Nút kết thúc thực hiện capture cuối rồi chốt session, không bị khóa bởi `EARLY_END_MINUTES` trong demo.
+
+Xem flow chi tiết tại `docs/AI_MVP_DEMO_FLOW.md`.
+
+### 7.6. Camera browser cho demo
+
+Phòng học có thể dùng `browser://camera` thay cho iVCam. FE giáo viên mở `navigator.mediaDevices.getUserMedia`, chụp JPEG và gửi vào endpoint hiện có:
+
+```http
+POST /api/v1/teacher/sessions/{session_id}/trigger-snapshot
+Authorization: Bearer <teacher_token>
+Content-Type: multipart/form-data
+image=<jpeg>
+```
+
+BE chuyển file qua `aiClientService.recognize()`; AI vẫn nhận roster của đúng session và trả `faces`, `score`, `pose`, `bbox`, `evidenceCrop`, `framePreview`. BE là nơi ghi attendance, lưu evidence và phát Socket.IO; FE không gọi trực tiếp AI.
+
+Với phòng RTSP, request JSON cũ tới cùng endpoint vẫn giữ nguyên. `GET /api/v1/teacher/sessions/resolve?courseCode={course_code}` cho phép giáo viên tra cứu phiên thuộc môn mình phụ trách rồi mở camera không cần nhập UUID session.
+
+Chi tiết thay đổi và checklist QA: `docs/CAMERA_WEBCAM_ATTENDANCE_REPORT.md`.
+
+---
+*Đây là tài liệu API tổng hợp; khi có khác biệt, contract ở mục 7.4 và `docs/AI_MVP_DEMO_FLOW.md` phản ánh implementation hiện tại của AI MVP.*
 

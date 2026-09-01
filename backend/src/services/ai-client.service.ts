@@ -32,6 +32,13 @@ type RecognitionFace = {
   evidenceCrop: string;
 };
 
+export type RecognitionFrame = {
+  faces: RecognitionFace[];
+  framePreview?: string;
+  frameWidth?: number;
+  frameHeight?: number;
+};
+
 export class AIClientService {
   private readonly baseUrl = (process.env.AI_SERVICE_URL || 'http://localhost:8000').replace(/\/$/, '');
   private readonly serviceKey = process.env.AI_SERVICE_KEY || '';
@@ -100,7 +107,7 @@ export class AIClientService {
     return this.parse(response);
   }
 
-  async recognize(sessionId: string, image: Express.Multer.File): Promise<{ faces: RecognitionFace[] }> {
+  async recognize(sessionId: string, image: Express.Multer.File): Promise<RecognitionFrame> {
     const form = new FormData();
     form.append('image', new Blob([new Uint8Array(image.buffer)], { type: image.mimetype }), image.originalname);
     const response = await fetch(`${this.baseUrl}/internal/v1/attendance-sessions/${encodeURIComponent(sessionId)}/recognitions`, {
@@ -109,17 +116,17 @@ export class AIClientService {
       body: form,
       signal: AbortSignal.timeout(30_000),
     });
-    return this.parse(response) as Promise<{ faces: RecognitionFace[] }>;
+    return this.parse(response) as Promise<RecognitionFrame>;
   }
 
-  async captureRtsp(sessionId: string, rtspUrl: string): Promise<{ faces: RecognitionFace[] }> {
+  async captureRtsp(sessionId: string, rtspUrl: string): Promise<RecognitionFrame> {
     const response = await fetch(`${this.baseUrl}/internal/v1/attendance-sessions/${encodeURIComponent(sessionId)}/capture`, {
       method: 'POST',
       headers: { ...this.headers(), 'content-type': 'application/json' },
       body: JSON.stringify({ rtspUrl }),
       signal: AbortSignal.timeout(35_000),
     });
-    return this.parse(response) as Promise<{ faces: RecognitionFace[] }>;
+    return this.parse(response) as Promise<RecognitionFrame>;
   }
 
   async unloadRoster(sessionId: string) {

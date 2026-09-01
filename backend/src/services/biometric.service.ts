@@ -18,13 +18,29 @@ export class BiometricService {
       where: { id: userId },
       include: {
         biometricProfile: true,
+        enrollmentImages: { orderBy: { imageIndex: 'asc' } },
         enrollments: { include: { courseClass: { include: { course: true } } } },
       },
     });
     if (!user) throw Object.assign(new Error('Không tìm thấy người dùng.'), { statusCode: 404 });
-    const preview = user.biometricProfile?.enrolledFaceUrl
-      ? await evidenceService.read(user.biometricProfile.enrolledFaceUrl).then((buffer) => buffer.toString('base64')).catch(() => null)
-      : null;
+    const storedImages = user.enrollmentImages.length
+      ? user.enrollmentImages
+      : user.biometricProfile?.enrolledFaceUrl
+        ? [{ id: 'legacy-primary', imageIndex: 1, imageUrl: user.biometricProfile.enrolledFaceUrl, mimeType: 'image/jpeg', pose: 'front' }]
+        : [];
+    const enrollmentImages = (await Promise.all(storedImages.map(async (image) => {
+      try {
+        return {
+          id: image.id,
+          imageIndex: image.imageIndex,
+          pose: image.pose,
+          previewBase64: await evidenceService.readDataUrl(image.imageUrl, image.mimeType),
+        };
+      } catch {
+        return null;
+      }
+    }))).filter((image): image is NonNullable<typeof image> => image !== null);
+    const primaryImage = enrollmentImages[0] || null;
     return {
       user: {
         userCode: user.userCode,
@@ -33,8 +49,9 @@ export class BiometricService {
         department: user.department,
         className: user.className,
         vectorId: user.biometricProfile?.faissVectorId ? Number(user.biometricProfile.faissVectorId) : 0,
-        masterImageUrl: user.biometricProfile?.enrolledFaceUrl || '',
-        previewBase64: preview ? `data:image/jpeg;base64,${preview}` : null,
+        masterImageUrl: '',
+        previewBase64: primaryImage?.previewBase64 || null,
+        enrollmentImages,
         aiModel: user.biometricProfile?.modelVersion || 'facenet-512d',
         matchScore: user.biometricProfile?.matchConfidence ? Number(user.biometricProfile.matchConfidence) : null,
       },
@@ -52,7 +69,8 @@ export class BiometricService {
         enrollmentVersion: user.biometricProfile.enrollmentVersion,
         enrolledAt: user.biometricProfile.lastEnrolledAt,
         previewUrl: user.biometricProfile.enrolledFaceUrl,
-        previewBase64: preview ? `data:image/jpeg;base64,${preview}` : null,
+        previewBase64: primaryImage?.previewBase64 || null,
+        enrollmentImageCount: enrollmentImages.length,
       } : null,
       courseClasses: user.enrollments.map((enrollment) => ({
         id: enrollment.courseClass.id,
@@ -71,9 +89,18 @@ export class BiometricService {
   async resetBiometric(userId: string, actorId: string, reason: string) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw Object.assign(new Error('Không tìm thấy người dùng.'), { statusCode: 404 });
-    if (user.isFaceEnrolled) await aiClientService.resetEnrollment(user.userCode);
+    await aiClientService.resetEnrollment(user.userCode);
+    const [profile, enrollmentImages] = await Promise.all([
+      prisma.userBiometric.findUnique({ where: { userId: user.id }, select: { enrolledFaceUrl: true } }),
+      prisma.userEnrollmentImage.findMany({ where: { userId: user.id }, select: { imageUrl: true } }),
+    ]);
+    const filesToDelete = [...new Set([
+      profile?.enrolledFaceUrl,
+      ...enrollmentImages.map((image) => image.imageUrl),
+    ].filter((file): file is string => Boolean(file)))];
     await prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: user.id }, data: { isFaceEnrolled: false, avatarUrl: null } });
+      await tx.userEnrollmentImage.deleteMany({ where: { userId: user.id } });
       await tx.userBiometric.updateMany({
         where: { userId: user.id },
         data: { faissVectorId: null, enrolledFaceUrl: null, lastEnrolledAt: null, matchConfidence: null },
@@ -90,6 +117,7 @@ export class BiometricService {
         },
       });
     });
+    await Promise.all(filesToDelete.map((file) => evidenceService.delete(file)));
     return { userId: user.id, isFaceEnrolled: false };
   }
 

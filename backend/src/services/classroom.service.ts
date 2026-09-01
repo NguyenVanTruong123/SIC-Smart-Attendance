@@ -1,6 +1,7 @@
 import prisma from '../config/prisma';
 import { CameraStatus, Prisma } from '@prisma/client';
 import * as net from 'net';
+import { BROWSER_CAMERA_URL, isBrowserCameraUrl } from '../utils/camera-source';
 
 export interface ClassroomFilterParams {
   search?: string;
@@ -103,8 +104,8 @@ export class ClassroomService {
     const items = classrooms.map((room) => {
       const isOnline = room.cameraStatus === CameraStatus.ONLINE;
       const roomType = room.capacity >= 100 ? 'Hội trường' : 'Phòng Lý thuyết';
-      const deviceType = room.rtspUrl.includes('4747') || room.rtspUrl.includes('8080')
-        ? 'iVCam (Mobile Bridge)'
+      const deviceType = isBrowserCameraUrl(room.rtspUrl)
+        ? 'Webcam máy tính (Browser)'
         : 'Hikvision IP Cam 1080p';
 
       return {
@@ -162,9 +163,13 @@ export class ClassroomService {
       throw error;
     }
 
+    const browserCamera = dto.deviceType === 'Webcam máy tính (Browser)' || isBrowserCameraUrl(dto.rtspUrl);
+
     // Tách địa chỉ IP từ rtspUrl nếu không truyền cameraIp riêng
     let cameraIp = dto.cameraIp?.trim();
-    if (!cameraIp && dto.rtspUrl) {
+    if (browserCamera) {
+      cameraIp = 'browser';
+    } else if (!cameraIp && dto.rtspUrl) {
       const match = dto.rtspUrl.match(/@?([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/);
       cameraIp = match ? match[1] : '192.168.1.100';
     }
@@ -176,7 +181,7 @@ export class ClassroomService {
         floor: Number(dto.floor) || 1,
         capacity: Number(dto.capacity) || 50,
         cameraIp: cameraIp || '192.168.1.100',
-        rtspUrl: dto.rtspUrl.trim(),
+        rtspUrl: browserCamera ? BROWSER_CAMERA_URL : dto.rtspUrl.trim(),
         cameraStatus: CameraStatus.ONLINE,
       },
     });
@@ -213,8 +218,9 @@ export class ClassroomService {
       }
     }
 
-    let cameraIp = dto.cameraIp?.trim() || existing.cameraIp;
-    if (dto.rtspUrl && !dto.cameraIp) {
+    const browserCamera = dto.deviceType === 'Webcam máy tính (Browser)' || (dto.rtspUrl ? isBrowserCameraUrl(dto.rtspUrl) : isBrowserCameraUrl(existing.rtspUrl));
+    let cameraIp = browserCamera ? 'browser' : dto.cameraIp?.trim() || existing.cameraIp;
+    if (!browserCamera && dto.rtspUrl && !dto.cameraIp) {
       const match = dto.rtspUrl.match(/@?([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/);
       if (match) cameraIp = match[1];
     }
@@ -227,7 +233,7 @@ export class ClassroomService {
         ...(dto.floor !== undefined && { floor: Number(dto.floor) }),
         ...(dto.capacity !== undefined && { capacity: Number(dto.capacity) }),
         ...(cameraIp && { cameraIp }),
-        ...(dto.rtspUrl && { rtspUrl: dto.rtspUrl.trim() }),
+        ...(dto.rtspUrl && { rtspUrl: browserCamera ? BROWSER_CAMERA_URL : dto.rtspUrl.trim() }),
         ...(dto.cameraStatus && { cameraStatus: dto.cameraStatus }),
       },
     });
@@ -285,6 +291,23 @@ export class ClassroomService {
       throw error;
     }
 
+    if (isBrowserCameraUrl(targetUrl)) {
+      const result = {
+        status: CameraStatus.ONLINE,
+        latencyMs: 1,
+        fps: 30,
+        packetLossPercent: 0,
+        resolution: 'Thiết bị trình duyệt',
+        bitrateKbps: 0,
+        codec: 'MediaDevices',
+        mode: 'BROWSER' as const,
+      };
+      if (data.roomId) {
+        await prisma.classroom.update({ where: { id: data.roomId }, data: { cameraIp: 'browser', rtspUrl: BROWSER_CAMERA_URL, cameraStatus: CameraStatus.ONLINE } }).catch(() => {});
+      }
+      return result;
+    }
+
     // 1. Kiểm tra định dạng URL (Bắt đầu bằng rtsp://, http://, https://)
     if (
       !targetUrl.startsWith('rtsp://') &&
@@ -299,37 +322,7 @@ export class ClassroomService {
       throw error;
     }
 
-    // 2. Xử lý riêng cho thiết bị Webcam ảo / iVCam / Localhost (truyền trực tiếp trên máy)
-    const isLocalVirtualCam =
-      targetUrl.toLowerCase().includes('ivcam') ||
-      targetUrl.includes('127.0.0.1') ||
-      targetUrl.toLowerCase().includes('localhost');
-
-    if (isLocalVirtualCam) {
-      if (data.roomId) {
-        await prisma.classroom.update({
-          where: { id: data.roomId },
-          data: { cameraStatus: CameraStatus.ONLINE },
-        }).catch(() => {});
-      } else if (targetUrl) {
-        await prisma.classroom.updateMany({
-          where: { rtspUrl: targetUrl },
-          data: { cameraStatus: CameraStatus.ONLINE },
-        }).catch(() => {});
-      }
-
-      return {
-        status: CameraStatus.ONLINE,
-        latencyMs: 1,
-        fps: 30,
-        packetLossPercent: 0.0,
-        resolution: '1920x1080',
-        bitrateKbps: 4096,
-        codec: 'DirectShow (H.264)',
-      };
-    }
-
-    // 3. Thử kết nối TCP Socket tới Host & Port cho Camera IP mạng thật
+    // 2. Thử kết nối TCP Socket tới Host & Port cho Camera IP mạng thật
     return new Promise((resolve) => {
       const startTime = Date.now();
 
@@ -367,6 +360,7 @@ export class ClassroomService {
           resolution: '1920x1080',
           bitrateKbps: 4096,
           codec: targetUrl!.includes('265') ? 'H.265' : 'H.264',
+          mode: 'RTSP' as const,
         });
       });
 
@@ -394,6 +388,7 @@ export class ClassroomService {
           resolution: '—',
           bitrateKbps: 0,
           codec: '—',
+          mode: 'RTSP' as const,
         });
       });
 
@@ -421,6 +416,7 @@ export class ClassroomService {
           resolution: '—',
           bitrateKbps: 0,
           codec: '—',
+          mode: 'RTSP' as const,
         });
       });
 
@@ -495,9 +491,10 @@ export class ClassroomService {
         capacity: classroom.capacity,
         cameraIp: classroom.cameraIp,
         cameraStatus: classroom.cameraStatus,
+        cameraMode: isBrowserCameraUrl(classroom.rtspUrl) ? 'BROWSER' as const : 'RTSP' as const,
         latencyMs: isOnline ? 118 : null,
         fps: isOnline ? 30 : 0,
-        codec: classroom.rtspUrl.includes('265') ? 'H.265' : 'H.264',
+        codec: isBrowserCameraUrl(classroom.rtspUrl) ? 'MediaDevices' : classroom.rtspUrl.includes('265') ? 'H.265' : 'H.264',
         bitrate: '4.2 Mbps',
       },
       todaySchedule,

@@ -37,6 +37,7 @@ import {
   FileExcelOutlined,
   CloudUploadOutlined,
   CheckSquareFilled,
+  DeleteOutlined,
 } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/utils/api";
@@ -140,6 +141,23 @@ export function AdminBiometrics() {
       queryClient.invalidateQueries({ queryKey: ["admin-biometrics"] });
     },
     onError: (err: Error) => message.error(err.message),
+  });
+
+  const { mutate: resetEnrollment, isPending: resettingEnrollment } = useMutation({
+    mutationFn: ({ userId, reason }: { userId: string; reason: string }) =>
+      api.post(`/admin/biometrics/${userId}/reset`, { reason }),
+    onMutate: () => {
+      message.loading({ content: "Đang reset enrollment...", key: "reset-enrollment" });
+    },
+    onSuccess: () => {
+      message.success({ content: "Đã reset enrollment khuôn mặt.", key: "reset-enrollment" });
+      setDetailUser(null);
+      setSelectedBiometric(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-biometrics"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-biometric-detail"] });
+    },
+    onError: (err: Error) =>
+      message.error({ content: err.message || "Không thể reset enrollment khuôn mặt.", key: "reset-enrollment" }),
   });
 
   // Import Excel Mutation
@@ -369,7 +387,34 @@ export function AdminBiometrics() {
           setDetailUser(null);
           setSelectedBiometric(null);
         }}
-        footer={null}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              type="primary"
+              danger
+              icon={<DeleteOutlined />}
+              loading={resettingEnrollment}
+              disabled={!detailUser || resettingEnrollment}
+              onClick={() => {
+                if (!detailUser || resettingEnrollment) return;
+                resetEnrollment({
+                  userId: detailUser,
+                  reason: "Admin reset enrollment từ hồ sơ sinh viên",
+                });
+              }}
+            >
+              Reset enrollment
+            </Button>
+            <Button
+              onClick={() => {
+                setDetailUser(null);
+                setSelectedBiometric(null);
+              }}
+            >
+              Đóng
+            </Button>
+          </div>
+        }
         width={640}
       >
         {detail && (
@@ -380,10 +425,27 @@ export function AdminBiometrics() {
               <Descriptions.Item label="Vector ID">{detail.user.vectorId}</Descriptions.Item>
               <Descriptions.Item label="AI Model">{detail.user.aiModel}</Descriptions.Item>
               <Descriptions.Item label="Match Score">{detail.user.matchScore}%</Descriptions.Item>
-              <Descriptions.Item label="Ảnh gốc">
+              <Descriptions.Item label="Ảnh đại diện">
                 <Image src={detail.user.previewBase64 || detail.user.masterImageUrl} width={80} alt="Master" />
               </Descriptions.Item>
             </Descriptions>
+            <Divider>{detail.user.enrollmentImages?.length ?? 0} ảnh gốc enrollment</Divider>
+            {detail.user.enrollmentImages?.length ? (
+              <Image.PreviewGroup>
+                <div className="flex gap-3 flex-wrap">
+                  {detail.user.enrollmentImages.map((image) => (
+                    <div key={image.id} className="flex flex-col gap-1">
+                      <Image src={image.previewBase64} width={120} alt={`Enrollment ${image.imageIndex}`} />
+                      <Text type="secondary" className="text-xs">
+                        {image.pose === "left" ? "Quay trái" : image.pose === "right" ? "Quay phải" : "Nhìn thẳng"} · Ảnh {image.imageIndex}
+                      </Text>
+                    </div>
+                  ))}
+                </div>
+              </Image.PreviewGroup>
+            ) : (
+              <Text type="secondary">Chưa có ảnh gốc enrollment.</Text>
+            )}
             <Divider>3 Ảnh CCTV gần nhất</Divider>
             <div className="flex gap-3 flex-wrap">
               {detail.recentCctvSnapshots.map((snap, i) => (
@@ -419,7 +481,7 @@ export function AdminBiometrics() {
             type="warning"
             showIcon
             message="Chưa tải được hồ sơ chi tiết"
-            description="Backend hiện mới cung cấp danh sách sinh trắc học. Endpoint hồ sơ chi tiết theo tài liệu chưa được triển khai."
+            description="Không thể tải dữ liệu chi tiết từ Backend. Hãy thử lại sau."
           />
         )}
       </Modal>

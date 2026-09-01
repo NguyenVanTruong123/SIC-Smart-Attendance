@@ -1,8 +1,9 @@
-import { Alert, Card, Image, Input, Table, Tag, Typography } from "antd";
+import { Alert, Card, Input, Table, Tag, Typography } from "antd";
 import { SearchOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import api from "@/utils/api";
+import { ProtectedImage } from "@/components/common/ProtectedImage";
 import { statusLabels, type AttendanceStatus } from "@/types";
 
 const { Text } = Typography;
@@ -62,7 +63,7 @@ export function AttendanceHistory() {
       dataIndex: "snapshotUrl",
       key: "snapshotUrl",
       width: 120,
-      render: (url?: string) => url ? <Image width={50} height={50} src={url} alt="Ảnh điểm danh" style={{ objectFit: "cover" }} /> : "—",
+      render: (url?: string) => <ProtectedImage width={50} height={50} preview src={url} alt="Ảnh điểm danh" style={{ objectFit: "cover" }} />,
     },
   ];
 

@@ -53,6 +53,7 @@ export function TeacherSchedule({ onStartScan }: { onStartScan: (sessionId: stri
 
   const startDate = isoDate(weekStart);
   const endDate = isoDate(weekEnd);
+  const isCurrentWeek = startDate === isoDate(mondayOf(new Date()));
   const { data, isLoading, isError } = useQuery<TeacherScheduleResponse>({
     queryKey: ["teacher-schedule", startDate, endDate],
     queryFn: () => api.get(`/teacher/schedule?startDate=${startDate}&endDate=${endDate}`) as Promise<TeacherScheduleResponse>,
@@ -70,7 +71,7 @@ export function TeacherSchedule({ onStartScan }: { onStartScan: (sessionId: stri
         </div>
         <div className="schedule-navigation">
           <Button icon={<LeftOutlined />} aria-label="Tuần trước" onClick={() => setWeekStart((current) => new Date(current.getFullYear(), current.getMonth(), current.getDate() - 7))} />
-          <Button onClick={() => setWeekStart(mondayOf(new Date()))}>Tuần này</Button>
+          <Button type={isCurrentWeek ? "primary" : "default"} onClick={() => setWeekStart(mondayOf(new Date()))}>Tuần này</Button>
           <Button icon={<RightOutlined />} aria-label="Tuần sau" onClick={() => setWeekStart((current) => new Date(current.getFullYear(), current.getMonth(), current.getDate() + 7))} />
         </div>
       </div>

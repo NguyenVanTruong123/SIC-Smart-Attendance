@@ -51,4 +51,6 @@ Chi tiết xem tại thư mục con của từng module:
 docker compose up --build
 ```
 
-Mở `http://localhost`. Tài khoản seed và contract sáu nhóm chức năng xem tại [báo cáo triển khai](./docs/SIX_MODULES_IMPLEMENTATION_REPORT.md).
+Mở `http://127.0.0.1:8600`. Tài khoản seed và contract sáu nhóm chức năng xem tại [báo cáo triển khai](./docs/SIX_MODULES_IMPLEMENTATION_REPORT.md).
+
+Môi trường local Docker bật các nút đăng nhập nhanh cho tài khoản demo. Khi triển khai thật, đặt `VITE_ENABLE_DEMO_ACCOUNTS=false` trước khi build frontend.

@@ -194,7 +194,11 @@ export function Enrollment() {
 
     try {
       const formData = new FormData();
-      capturedFrames.forEach((frame, index) => formData.append("frames", frame, `face-${index + 1}.jpg`));
+      capturedFrames.forEach((frame, index) => {
+        const step = poseSteps[Math.min(Math.floor(index / REQUIRED_FRAMES_PER_POSE), poseSteps.length - 1)];
+        const frameNumber = (index % REQUIRED_FRAMES_PER_POSE) + 1;
+        formData.append("frames", frame, `${step.pose}-${frameNumber}.jpg`);
+      });
       const result = (await api.post("/ekyc/enroll-initial", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       })) as unknown as EkycEnrollResponse;
