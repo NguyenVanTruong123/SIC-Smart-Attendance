@@ -21,5 +21,6 @@ router.post('/refresh', (req, res, next) => authController.refresh(req, res, nex
 
 // Route Lấy thông tin cá nhân (Được bảo vệ - Bắt buộc phải có Token JWT hợp lệ)
 router.get('/me', verifyToken, (req, res, next) => authController.getMe(req, res, next));
+router.post('/change-password', verifyToken, (req, res, next) => authController.changePassword(req, res, next));
 
 export default router;

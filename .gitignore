@@ -39,6 +39,7 @@ logs/
 temp/
 tmp/
 *.tmp
+runtime/
 
 # 5. IDE & OS files
 .vscode/

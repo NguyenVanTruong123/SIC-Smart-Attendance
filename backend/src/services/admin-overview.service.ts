@@ -1,5 +1,6 @@
 import prisma from '../config/prisma';
 import { UserRole, CameraStatus, SessionStatus } from '@prisma/client';
+import { periodLabel } from '../utils/study-periods';
 
 export class AdminOverviewService {
   /**
@@ -132,6 +133,9 @@ export class AdminOverviewService {
         roomCode: session.classroom?.roomCode || 'P.---',
         startTime: startTimeStr,
         endTime: endTimeStr,
+        periodStart: session.periodStart,
+        periodEnd: session.periodEnd,
+        periodLabel: periodLabel(session.periodStart, session.periodEnd),
         totalStudents: session.courseClass._count.enrollments,
         attendedCount: session._count.attendanceLogs,
         liveStatus,

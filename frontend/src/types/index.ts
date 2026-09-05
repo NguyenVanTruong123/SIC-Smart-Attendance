@@ -4,9 +4,9 @@
 
 // --- Enums (UPPERCASE as per API docs) ---
 export type Role = "ADMIN" | "TEACHER" | "STUDENT";
-export type AttendanceStatus = "PRESENT" | "LATE" | "ABSENT" | "TRUANT" | "EXCUSED";
+export type AttendanceStatus = "UNCONFIRMED" | "PRESENT" | "LATE" | "ABSENT" | "TRUANT" | "EXCUSED";
 export type CameraStatus = "ONLINE" | "OFFLINE" | "MAINTENANCE";
-export type SessionStatus = "LIVE_NOW" | "UPCOMING" | "COMPLETED";
+export type SessionStatus = "SCHEDULED" | "LIVE_NOW" | "REVIEW" | "DEGRADED" | "FAILED" | "UPCOMING" | "COMPLETED" | "CANCELLED";
 export type LeaveRequestType = "FULL_SESSION" | "LATE_ENTRY";
 export type LeaveRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type EkycStatus = "ENROLLED" | "NOT_ENROLLED" | "PENDING_RESET";
@@ -71,6 +71,42 @@ export interface EkycEnrollResponse {
   matchScore: number;
   isFaceEnrolled: boolean;
   redirectUrl: string;
+  savedOriginalFrames?: number;
+}
+
+export interface EnrollmentImage {
+  id: string;
+  imageIndex: number;
+  pose: string | null;
+  previewBase64: string;
+}
+
+export interface StudentBiometricProfileData {
+  student: {
+    id: string;
+    userCode: string;
+    fullName: string;
+    email: string;
+    department?: string | null;
+    className?: string | null;
+  };
+  status: EkycStatus;
+  biometric: {
+    vectorId: string | null;
+    modelVersion: string | null;
+    embeddingDimension: number | null;
+    enrollmentVersion: number;
+    enrolledAt: string | null;
+  } | null;
+  previewUrl: string | null;
+  enrollmentImages: EnrollmentImage[];
+}
+
+export interface PoseDetection {
+  pose: "front" | "left" | "right" | "unknown";
+  confidence: number;
+  faceCount: number;
+  bbox?: { x: number; y: number; width: number; height: number };
 }
 
 // --- Admin: Classrooms (§3.1 docs) ---
@@ -90,7 +126,7 @@ export interface Classroom {
   roomType?: string;
   deviceType?: string;
   cameraIp: string;
-  rtspUrl: string;
+  rtspUrl?: string;
   cameraStatus: CameraStatus;
   latencyMs: number | null;
   fps: number;
@@ -159,6 +195,8 @@ export interface BiometricDetail {
     department: string;
     vectorId: number;
     masterImageUrl: string;
+    previewBase64?: string | null;
+    enrollmentImages: EnrollmentImage[];
     aiModel: string;
     matchScore: number;
   };
@@ -181,33 +219,6 @@ export interface ReEkycComparison {
     studentCardImage: string;
     newFaceCropFromVideo: string;
   };
-}
-
-// --- Admin: Audit Logs (§3.3 docs) ---
-export interface AuditKpis {
-  totalOverrides: number;
-  overridesToPresent: number;
-  overridesToExcused: number;
-}
-
-export interface AuditRecord {
-  id: string;
-  timestamp: string;
-  actorName: string;
-  studentCode: string;
-  studentName: string;
-  courseClassName: string;
-  oldStatus: AttendanceStatus;
-  newStatus: AttendanceStatus;
-  reason: string;
-}
-
-export interface AuditDetail extends AuditRecord {
-  actor: { id: string; name: string; role: Role };
-  student: { code: string; name: string; class: string };
-  session: { id: string; room: string; time: string };
-  change: { from: AttendanceStatus; to: AttendanceStatus };
-  cctvClassroomSnapshotUrl: string;
 }
 
 // --- Teacher: Schedule (§4.1.1 docs) ---
@@ -239,6 +250,7 @@ export interface SessionDetail {
     className: string;
     roomCode: string;
     rtspStreamUrl: string;
+    cameraMode?: "BROWSER" | "RTSP";
     fps: number;
     status: SessionStatus;
   };
@@ -256,8 +268,10 @@ export interface SessionDetail {
     status: AttendanceStatus;
     firstDetectedAt: string;
     matchPercentage: number;
-    avatarUrl: string;
+    avatarUrl?: string;
+    evidenceUrl?: string;
   }>;
+  unknownFaces?: Array<{ id: string; result: string; capturedAt: string; cropUrl?: string }>;
 }
 
 export interface SnapshotMilestone {
@@ -314,6 +328,37 @@ export interface StudentDashboardData {
     attendanceRate: number;
     status: "SAFE" | "WARNING" | "DANGER";
   }>;
+  weeklySchedule: Array<{
+    id: string;
+    sessionNumber: number;
+    sessionDate: string;
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+    periodStart?: number | null;
+    periodEnd?: number | null;
+    periodLabel?: string | null;
+    courseCode: string;
+    courseName: string;
+    classCode: string;
+    roomCode: string;
+    topic?: string | null;
+    status: string;
+  }>;
+  weekStart: string;
+  weekEnd: string;
+}
+
+export interface TeacherSessionLookup {
+  id: string;
+  courseCode: string;
+  courseName: string;
+  classCode: string;
+  sessionDate: string;
+  sessionNumber: number;
+  roomCode: string;
+  status: SessionStatus;
+  cameraMode: "BROWSER" | "RTSP";
 }
 
 // --- Student: Leave Request (§5.2.1 docs) ---
@@ -327,7 +372,24 @@ export interface WsFaceDetected {
   studentCode: string;
   fullName: string;
   matchPercentage: number;
-  boundingBox: { x: number; y: number; w: number; h: number };
+  boundingBox: { x: number; y: number; width: number; height: number };
+  capturedAt?: string;
+}
+
+export interface WsFrameCapturedFace {
+  result: "MATCHED" | "UNKNOWN_PERSON" | "AMBIGUOUS";
+  studentCode?: string;
+  fullName?: string;
+  score: number;
+  bbox: { x: number; y: number; width: number; height: number };
+}
+
+export interface WsFrameCaptured {
+  capturedAt: string;
+  framePreview?: string;
+  frameWidth?: number;
+  frameHeight?: number;
+  faces: WsFrameCapturedFace[];
 }
 
 export interface WsStatUpdate {
@@ -352,7 +414,7 @@ export interface WsIntruderAlert {
 // --- Page types for navigation ---
 export type StudentPage = "dashboard" | "enrollment" | "attendance" | "leave" | "biometric" | "profile";
 export type TeacherPage = "schedule" | "scan" | "leave_requests" | "reports" | "profile";
-export type AdminPage = "dashboard" | "biometrics" | "classrooms" | "classes" | "audit" | "profile";
+export type AdminPage = "dashboard" | "biometrics" | "classrooms" | "classes" | "profile";
 export type AnyPage = StudentPage | TeacherPage | AdminPage;
 
 // --- Labels ---
@@ -363,6 +425,7 @@ export const roleLabels: Record<Role, string> = {
 };
 
 export const statusLabels: Record<AttendanceStatus, string> = {
+  UNCONFIRMED: "Chưa xác định",
   PRESENT: "Đúng giờ",
   LATE: "Đi muộn",
   ABSENT: "Vắng mặt",
@@ -371,6 +434,7 @@ export const statusLabels: Record<AttendanceStatus, string> = {
 };
 
 export const statusColors: Record<AttendanceStatus, string> = {
+  UNCONFIRMED: "#64748b",
   PRESENT: "#10b981",
   LATE: "#d97706",
   ABSENT: "#dc2626",

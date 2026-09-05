@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { UserRole } from '@prisma/client';
 import { verifyToken, authorizeRoles } from '../middlewares/auth.middlewares';
 import { teacherController } from '../controllers/teacher.controller';
+import { teacherSessionController } from '../controllers/teacher-session.controller';
+import { teacherWorkspaceController } from '../controllers/teacher-workspace.controller';
+import { uploadMedia } from '../middlewares/upload.middleware';
 
 const router = Router();
 
@@ -14,5 +17,15 @@ router.use(verifyToken, authorizeRoles(UserRole.TEACHER, UserRole.ADMIN));
  * @access  Teacher / Admin
  */
 router.get('/schedule', (req, res, next) => teacherController.getSchedule(req, res, next));
+router.get('/sessions/resolve', (req, res, next) => teacherSessionController.resolve(req, res, next));
+router.get('/sessions/:id', (req, res, next) => teacherSessionController.get(req, res, next));
+router.post('/sessions/:id/start', (req, res, next) => teacherSessionController.start(req, res, next));
+router.post('/sessions/:id/trigger-snapshot', uploadMedia.single('image'), (req, res, next) => teacherSessionController.capture(req, res, next));
+router.put('/sessions/:id/attendance/:studentId/override', (req, res, next) => teacherSessionController.override(req, res, next));
+router.post('/sessions/:id/end', (req, res, next) => teacherSessionController.end(req, res, next));
+router.get('/sessions/:id/evidence/:evidenceId', (req, res, next) => teacherSessionController.evidence(req, res, next));
+router.get('/leave-requests', (req, res, next) => teacherWorkspaceController.leaveRequests(req, res, next));
+router.post('/sessions/:id/quick-approve-leave', (req, res, next) => teacherWorkspaceController.reviewLeave(req, res, next));
+router.get('/reports/matrix', (req, res, next) => teacherWorkspaceController.reportMatrix(req, res, next));
 
 export default router;

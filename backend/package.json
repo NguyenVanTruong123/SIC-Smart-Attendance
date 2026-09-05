@@ -9,7 +9,18 @@
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
+    "prisma:migrate": "prisma migrate deploy",
+    "seed": "tsx src/scripts/seed.ts",
     "prisma:studio": "prisma studio"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "bcrypt",
+      "esbuild",
+      "prisma"
+    ]
   },
   "keywords": [
     "spas",
@@ -31,6 +42,7 @@
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
+    "socket.io": "^4.8.3",
     "xlsx": "^0.18.5",
     "zod": "^3.22.4"
   },

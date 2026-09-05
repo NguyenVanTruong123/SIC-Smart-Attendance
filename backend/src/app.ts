@@ -6,6 +6,9 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes';
 import adminRoutes from './routes/admin.routes'; 
 import teacherRoutes from './routes/teacher.routes';
+import ekycRoutes from './routes/ekyc.routes';
+import studentRoutes from './routes/student.routes';
+import { apiRateLimit } from './middlewares/rate-limit.middleware';
 
 dotenv.config();
 
@@ -22,6 +25,7 @@ app.use(
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use('/api/v1', apiRateLimit());
 
 // 2. Route kiểm tra sức khỏe hệ thống (Health Check)
 app.get('/api/v1/health', (req: Request, res: Response) => {
@@ -37,6 +41,8 @@ app.get('/api/v1/health', (req: Request, res: Response) => {
 app.use('/api/v1/auth', authRoutes); // <-- 2. Mở cổng API /api/v1/auth
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/teacher', teacherRoutes);
+app.use('/api/v1/ekyc', ekycRoutes);
+app.use('/api/v1/student', studentRoutes);
 
 // 4. Bắt lỗi khi người dùng gọi sai đường dẫn (404 Not Found)
 app.use((req: Request, res: Response) => {
@@ -52,14 +58,15 @@ app.use((req: Request, res: Response) => {
 });
 
 // 5. Xử lý lỗi tập trung toàn hệ thống (Global Error Handler)
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+app.use((err: Error & { statusCode?: number }, req: Request, res: Response, next: NextFunction) => {
   console.error('Unhandled Error:', err);
-  res.status(500).json({
+  const statusCode = err.statusCode || 500;
+  res.status(statusCode).json({
     success: false,
-    statusCode: 500,
+    statusCode,
     error: {
-      code: 'INTERNAL_SERVER_ERROR',
-      message: err.message || 'Đã có lỗi xảy ra trên máy chủ.',
+      code: statusCode >= 500 ? 'INTERNAL_SERVER_ERROR' : 'REQUEST_FAILED',
+      message: statusCode >= 500 ? 'Đã có lỗi xảy ra trên máy chủ.' : err.message,
     },
     timestamp: new Date().toISOString(),
   });

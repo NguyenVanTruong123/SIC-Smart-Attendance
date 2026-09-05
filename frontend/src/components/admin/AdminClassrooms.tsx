@@ -48,28 +48,14 @@ export function AdminClassrooms() {
   const [modalPingStatus, setModalPingStatus] = useState<"IDLE" | "SUCCESS" | "FAILED">("IDLE");
   const [modalPingLatency, setModalPingLatency] = useState<number | null>(null);
   const [modalPinging, setModalPinging] = useState(false);
-  const [hasIvcam, setHasIvcam] = useState(false);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+  const [cameraResetKey, setCameraResetKey] = useState(0);
+  const [restartingStream, setRestartingStream] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [form] = Form.useForm();
   const watchedDeviceType = Form.useWatch("deviceType", form);
-  const isIvcam = watchedDeviceType === "iVCam (Mobile Bridge)";
+  const isBrowserCamera = watchedDeviceType === "Webcam máy tính (Browser)";
   const queryClient = useQueryClient();
-
-  // Quét nhận diện thiết bị camera trên máy (iVCam / USB Cam)
-  useEffect(() => {
-    if (navigator.mediaDevices?.enumerateDevices) {
-      navigator.mediaDevices
-        .enumerateDevices()
-        .then((devices) => {
-          const found = devices.some(
-            (d) => d.label.toLowerCase().includes("ivcam") || d.kind === "videoinput"
-          );
-          setHasIvcam(found);
-        })
-        .catch(() => {});
-    }
-  }, []);
 
   // List
   const { data, isLoading } = useQuery<ClassroomListResponse>({
@@ -85,25 +71,26 @@ export function AdminClassrooms() {
     enabled: !!detailId,
   });
 
-  // Tự động kết nối luồng Video thật từ Camera (iVCam / Webcam máy tính) khi mở Modal Giám sát
+  // Tự động mở webcam máy hiện tại khi xem chi tiết phòng trong trình duyệt.
   useEffect(() => {
     let activeStream: MediaStream | null = null;
+    let cancelled = false;
     if (detailId && detail?.classroom?.cameraStatus === "ONLINE") {
       navigator.mediaDevices
         ?.enumerateDevices()
         .then(async (devices) => {
           const videoDevices = devices.filter((d) => d.kind === "videoinput");
-          // Ưu tiên chọn thiết bị iVCam nếu có, nếu không thì lấy Camera mặc định của máy
-          const ivcamDevice = videoDevices.find((d) =>
-            d.label.toLowerCase().includes("ivcam")
-          );
-          const targetDeviceId = ivcamDevice?.deviceId || videoDevices[0]?.deviceId;
+          const targetDeviceId = videoDevices[0]?.deviceId;
 
           try {
             const stream = await navigator.mediaDevices.getUserMedia({
               video: targetDeviceId ? { deviceId: { exact: targetDeviceId } } : true,
               audio: false,
             });
+            if (cancelled) {
+              stream.getTracks().forEach((track) => track.stop());
+              return;
+            }
             activeStream = stream;
             setMediaStream(stream);
             if (videoRef.current) {
@@ -117,11 +104,33 @@ export function AdminClassrooms() {
     }
 
     return () => {
+      cancelled = true;
       if (activeStream) {
         activeStream.getTracks().forEach((t) => t.stop());
       }
+      if (videoRef.current?.srcObject === activeStream) videoRef.current.srcObject = null;
+      setMediaStream((current) => (current === activeStream ? null : current));
     };
-  }, [detailId, detail?.classroom?.cameraStatus]);
+  }, [detailId, detail?.classroom?.cameraStatus, cameraResetKey]);
+
+  const restartStream = async () => {
+    if (!detail) return;
+    setRestartingStream(true);
+    try {
+      mediaStream?.getTracks().forEach((track) => track.stop());
+      if (videoRef.current) videoRef.current.srcObject = null;
+      setMediaStream(null);
+      await api.post(`/admin/classrooms/${detail.classroom.id}/ping-camera`);
+      await queryClient.invalidateQueries({ queryKey: ["admin-classrooms"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-classroom-detail", detail.classroom.id] });
+      setCameraResetKey((value) => value + 1);
+      message.success(`Đã reset và kết nối lại camera phòng ${detail.classroom.roomCode}.`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "Không thể khởi động lại camera.");
+    } finally {
+      setRestartingStream(false);
+    }
+  };
 
   // Create/Update
   const { mutate: save, isPending: saving } = useMutation({
@@ -151,8 +160,8 @@ export function AdminClassrooms() {
 
   // Ping camera ngoài bảng
   const { mutate: ping, isPending: pinging } = useMutation({
-    mutationFn: (rtspUrl: string) =>
-      api.post("/admin/classrooms/ping-camera", { rtspUrl }) as Promise<PingCameraResponse>,
+    mutationFn: (roomId: string) =>
+      api.post("/admin/classrooms/ping-camera", { roomId }) as Promise<PingCameraResponse>,
     onSuccess: (result) => {
       const res = result as unknown as PingCameraResponse;
       setPingResult(res);
@@ -251,13 +260,6 @@ export function AdminClassrooms() {
       render: (ip: string) => <code className="text-xs">{ip}</code>,
     },
     {
-      title: "RTSP URL",
-      dataIndex: "rtspUrl",
-      key: "rtspUrl",
-      ellipsis: true,
-      render: (url: string) => <code className="text-xs">{url}</code>,
-    },
-    {
       title: "Trạng thái",
       dataIndex: "cameraStatus",
       key: "cameraStatus",
@@ -287,7 +289,7 @@ export function AdminClassrooms() {
             />
           )}
           <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} />
-          <Button size="small" icon={<ApiOutlined />} onClick={() => ping(r.rtspUrl)} loading={pinging} />
+          <Button size="small" icon={<ApiOutlined />} onClick={() => ping(r.id)} loading={pinging} />
           <Button size="small" danger icon={<DeleteOutlined />} onClick={() => remove(r.id)} />
         </div>
       ),
@@ -400,10 +402,10 @@ export function AdminClassrooms() {
             <Select
               onChange={(val) => {
                 setModalPingStatus("IDLE");
-                if (val === "iVCam (Mobile Bridge)") {
+                if (val === "Webcam máy tính (Browser)") {
                   form.setFieldsValue({
-                    cameraIp: "127.0.0.1",
-                    rtspUrl: "rtsp://127.0.0.1:4747/live",
+                    cameraIp: "browser",
+                    rtspUrl: "browser://camera",
                   });
                 } else if (val === "Hikvision IP Camera") {
                   form.setFieldsValue({
@@ -419,10 +421,7 @@ export function AdminClassrooms() {
               }}
               options={[
                 { value: "Hikvision IP Camera", label: "Hikvision IP Camera (H.264/H.265)" },
-                {
-                  value: "iVCam (Mobile Bridge)",
-                  label: `📱 iVCam (Mobile Bridge - Smartphone) ${hasIvcam ? "🟢 Đã phát hiện" : ""}`,
-                },
+                { value: "Webcam máy tính (Browser)", label: "💻 Webcam máy tính / điện thoại (Browser)" },
                 { value: "Dahua AI Camera", label: "Dahua AI RTSP Camera" },
                 { value: "Ezviz / Imou Camera", label: "Ezviz / Imou Home RTSP Camera" },
                 { value: "Webcam USB / Integrated", label: "💻 Webcam USB / DirectShow" },
@@ -440,8 +439,8 @@ export function AdminClassrooms() {
               >
                 <Input
                   placeholder="192.168.1.102"
-                  disabled={isIvcam}
-                  style={isIvcam ? { backgroundColor: "#f8fafc", color: "#64748b", cursor: "not-allowed" } : undefined}
+                  disabled={isBrowserCamera}
+                  style={isBrowserCamera ? { backgroundColor: "#f8fafc", color: "#64748b", cursor: "not-allowed" } : undefined}
                 />
               </Form.Item>
             </Col>
@@ -454,14 +453,14 @@ export function AdminClassrooms() {
                 <Input
                   prefix={<LinkOutlined className="text-slate-400" />}
                   placeholder="rtsp://192.168.1.102:554/live/ch0"
-                  disabled={isIvcam}
-                  style={isIvcam ? { backgroundColor: "#f8fafc", color: "#64748b", cursor: "not-allowed" } : undefined}
+                  disabled={isBrowserCamera}
+                  style={isBrowserCamera ? { backgroundColor: "#f8fafc", color: "#64748b", cursor: "not-allowed" } : undefined}
                 />
               </Form.Item>
             </Col>
           </Row>
 
-          {isIvcam && (
+          {isBrowserCamera && (
             <div
               style={{
                 background: "#eff6ff",
@@ -479,7 +478,7 @@ export function AdminClassrooms() {
             >
               <span>🔒</span>
               <span>
-                <strong>iVCam DirectShow:</strong> Đã tự động khóa & cấu hình luồng nội bộ cục bộ (Không cần chỉnh sửa IP thủ công).
+                <strong>Webcam trình duyệt:</strong> Giáo viên sẽ mở camera trên thiết bị đang truy cập trang điểm danh. Không cần RTSP hoặc iVCam.
               </span>
             </div>
           )}
@@ -677,11 +676,11 @@ export function AdminClassrooms() {
                   >
                     <span className="text-slate-300 font-medium">Độ trễ AI:</span>
                     <span style={{ color: "#34d399", fontFamily: "monospace", fontWeight: 700 }}>
-                      {detail.classroom.latencyMs || 118}ms
+                      {detail.classroom.latencyMs ?? "—"}{detail.classroom.latencyMs !== null ? "ms" : ""}
                     </span>
                     <span className="text-slate-500">|</span>
                     <span style={{ color: "#60a5fa", fontWeight: 600 }}>
-                      👥 {detail.todaySchedule[0]?.attendedCount || 44} SV
+                      👥 {detail.todaySchedule[0]?.attendedCount ?? 0} SV
                     </span>
                   </div>
 
@@ -703,7 +702,7 @@ export function AdminClassrooms() {
                       boxShadow: "0 4px 14px rgba(0,0,0,0.4)",
                     }}
                   >
-                    Đang phân tích: {detail.todaySchedule[0]?.attendedCount || 44}/{detail.todaySchedule[0]?.totalStudents || detail.classroom.capacity} Sinh viên khớp khuôn mặt ({Math.min(100, Math.round(((detail.todaySchedule[0]?.attendedCount || 44) / (detail.todaySchedule[0]?.totalStudents || detail.classroom.capacity)) * 100))}%)
+                    Đang phân tích: {detail.todaySchedule[0]?.attendedCount ?? 0}/{detail.todaySchedule[0]?.totalStudents ?? 0} Sinh viên khớp khuôn mặt ({detail.todaySchedule[0]?.totalStudents ? Math.min(100, Math.round(((detail.todaySchedule[0]?.attendedCount ?? 0) / detail.todaySchedule[0].totalStudents) * 100)) : 0}%)
                   </div>
                 </div>
 
@@ -727,7 +726,7 @@ export function AdminClassrooms() {
                         ĐỊA CHỈ LUỒNG
                       </div>
                       <div style={{ fontSize: 13, fontFamily: "monospace", color: "#1e293b", fontWeight: 600 }}>
-                        {detail.classroom.rtspUrl}
+                        Luồng camera được lưu bảo mật ở Backend
                       </div>
                     </div>
                   </div>
@@ -860,8 +859,9 @@ export function AdminClassrooms() {
               <Button
                 type="primary"
                 icon={<ReloadOutlined />}
+                loading={restartingStream}
                 style={{ background: "#2563eb", borderColor: "#2563eb", fontWeight: 600 }}
-                onClick={() => message.success(`Đang khởi động lại luồng RTSP phòng ${detail.classroom.roomCode}...`)}
+                onClick={() => void restartStream()}
               >
                 Khởi Động Lại Luồng
               </Button>
