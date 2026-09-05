@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { ConfigProvider, Dropdown, Spin, theme } from "antd";
 import {
-  AuditOutlined,
   BarChartOutlined,
   BookOutlined,
   CameraOutlined,
@@ -32,7 +31,6 @@ import { AdminQuickOverview } from "@/components/admin/AdminQuickOverview";
 import { AdminBiometrics } from "@/components/admin/AdminBiometrics";
 import { AdminClassrooms } from "@/components/admin/AdminClassrooms";
 import { AdminClasses } from "@/components/admin/AdminClasses";
-import { AdminAuditLogs } from "@/components/admin/AdminAuditLogs";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -60,7 +58,6 @@ const adminMenu: NavigationItem[] = [
   { key: "biometrics", icon: <IdcardOutlined />, label: "Quản lý sinh trắc học" },
   { key: "classrooms", icon: <VideoCameraOutlined />, label: "Phòng học & camera" },
   { key: "classes", icon: <BookOutlined />, label: "Môn & lớp học phần" },
-  { key: "audit", icon: <AuditOutlined />, label: "Nhật ký hệ thống" },
   { key: "profile", icon: <UserOutlined />, label: "Tài khoản cá nhân" },
 ];
 
@@ -102,7 +99,6 @@ function pagePathForRole(role: User["role"], page: AnyPage, sessionId?: string) 
     biometrics: "/admin/biometrics",
     classrooms: "/admin/classrooms",
     classes: "/admin/classes",
-    audit: "/admin/audit",
     profile: "/admin/profile",
   };
   return paths[page] ?? "/admin";
@@ -143,7 +139,6 @@ function routeForLocation(role: User["role"]): { page: AnyPage; sessionId?: stri
   if (pathname === "/admin/biometrics") return { page: "biometrics" };
   if (pathname === "/admin/classrooms") return { page: "classrooms" };
   if (pathname === "/admin/classes") return { page: "classes" };
-  if (pathname === "/admin/audit") return { page: "audit" };
   if (pathname === "/admin/profile") return { page: "profile" };
   return { page: "dashboard" };
 }
@@ -216,7 +211,6 @@ function AppShell() {
       case "biometrics": content = <AdminBiometrics />; break;
       case "classrooms": content = <AdminClassrooms />; break;
       case "classes": content = <AdminClasses />; break;
-      case "audit": content = <AdminAuditLogs />; break;
       case "profile": content = <Profile />; break;
     }
   }

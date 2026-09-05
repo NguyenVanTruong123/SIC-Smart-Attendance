@@ -221,33 +221,6 @@ export interface ReEkycComparison {
   };
 }
 
-// --- Admin: Audit Logs (§3.3 docs) ---
-export interface AuditKpis {
-  totalOverrides: number;
-  overridesToPresent: number;
-  overridesToExcused: number;
-}
-
-export interface AuditRecord {
-  id: string;
-  timestamp: string;
-  actorName: string;
-  studentCode: string;
-  studentName: string;
-  courseClassName: string;
-  oldStatus: AttendanceStatus;
-  newStatus: AttendanceStatus;
-  reason: string;
-}
-
-export interface AuditDetail extends AuditRecord {
-  actor: { id: string; name: string; role: Role };
-  student: { code: string; name: string; class: string };
-  session: { id: string; room: string; time: string };
-  change: { from: AttendanceStatus; to: AttendanceStatus };
-  cctvClassroomSnapshotUrl: string;
-}
-
 // --- Teacher: Schedule (§4.1.1 docs) ---
 export interface TeacherSession {
   sessionId: string;
@@ -441,7 +414,7 @@ export interface WsIntruderAlert {
 // --- Page types for navigation ---
 export type StudentPage = "dashboard" | "enrollment" | "attendance" | "leave" | "biometric" | "profile";
 export type TeacherPage = "schedule" | "scan" | "leave_requests" | "reports" | "profile";
-export type AdminPage = "dashboard" | "biometrics" | "classrooms" | "classes" | "audit" | "profile";
+export type AdminPage = "dashboard" | "biometrics" | "classrooms" | "classes" | "profile";
 export type AnyPage = StudentPage | TeacherPage | AdminPage;
 
 // --- Labels ---
