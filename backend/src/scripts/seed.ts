@@ -168,6 +168,22 @@ async function ensureAttendance(
   });
 }
 
+async function ensureLeaveRequest(
+  studentId: string,
+  sessionId: string,
+  requestType: LeaveRequestType,
+  reason: string,
+  status: RequestStatus,
+  reviewerId: string | null = null,
+  reviewNote: string | null = null,
+  reviewedAt: Date | null = null,
+) {
+  const existing = await prisma.leaveRequest.findFirst({ where: { studentId, sessionId } });
+  const data = { requestType, reason, status, reviewerId, reviewNote, reviewedAt };
+  if (existing) return prisma.leaveRequest.update({ where: { id: existing.id }, data });
+  return prisma.leaveRequest.create({ data: { studentId, sessionId, ...data } });
+}
+
 async function main() {
   console.log('🌱 Đang nạp dữ liệu QA SPAS...');
 
@@ -432,35 +448,51 @@ async function main() {
   await ensureAttendance(historySession.id, students['21020003'].id, AttendanceStatus.ABSENT, null, 0, null);
   await ensureAttendance(historySession.id, students['21020004'].id, AttendanceStatus.EXCUSED, null, 0, null);
 
-  const existingApprovedLeave = await prisma.leaveRequest.findFirst({ where: { studentId: students['21020004'].id, sessionId: historySession.id } });
-  if (existingApprovedLeave) {
-    await prisma.leaveRequest.update({ where: { id: existingApprovedLeave.id }, data: { status: RequestStatus.APPROVED, reviewerId: teachers.GV001.id, reviewNote: 'Đã duyệt nghỉ học có lý do.' } });
-  } else {
-    await prisma.leaveRequest.create({
-      data: {
-        studentId: students['21020004'].id,
-        sessionId: historySession.id,
-        requestType: LeaveRequestType.FULL_SESSION,
-        reason: 'Có lịch khám bệnh.',
-        status: RequestStatus.APPROVED,
-        reviewerId: teachers.GV001.id,
-        reviewNote: 'Đã duyệt nghỉ học có lý do.',
-        reviewedAt: addMinutes(historySession.sessionDate, 10),
-      },
-    });
-  }
-  const existingPendingLeave = await prisma.leaveRequest.findFirst({ where: { studentId: students['21020003'].id, sessionId: nextIntSession.id } });
-  if (!existingPendingLeave) {
-    await prisma.leaveRequest.create({
-      data: {
-        studentId: students['21020003'].id,
-        sessionId: nextIntSession.id,
-        requestType: LeaveRequestType.LATE_ENTRY,
-        reason: 'Có lịch làm thủ tục hành chính trước giờ học.',
-        status: RequestStatus.PENDING,
-      },
-    });
-  }
+  await ensureLeaveRequest(
+    students['21020004'].id,
+    historySession.id,
+    LeaveRequestType.FULL_SESSION,
+    'Có lịch khám bệnh.',
+    RequestStatus.APPROVED,
+    teachers.GV001.id,
+    'Đã duyệt nghỉ học có lý do.',
+    addMinutes(historySession.sessionDate, 10),
+  );
+  await ensureLeaveRequest(
+    students['21020003'].id,
+    nextIntSession.id,
+    LeaveRequestType.LATE_ENTRY,
+    'Có lịch làm thủ tục hành chính trước giờ học.',
+    RequestStatus.PENDING,
+  );
+
+  await ensureLeaveRequest(
+    students['21020002'].id,
+    nextIntSession.id,
+    LeaveRequestType.FULL_SESSION,
+    'Gia đình có việc đột xuất trong ngày học.',
+    RequestStatus.PENDING,
+  );
+  await ensureLeaveRequest(
+    students['21020001'].id,
+    nextIntSession.id,
+    LeaveRequestType.LATE_ENTRY,
+    'Kẹt xe trên đường đến trường, xin phép vào muộn.',
+    RequestStatus.REJECTED,
+    teachers.GV001.id,
+    'Lý do chưa đủ căn cứ để duyệt.',
+    addMinutes(nextIntSession.sessionDate, 12),
+  );
+  await ensureLeaveRequest(
+    students['21020004'].id,
+    nextIntSession.id,
+    LeaveRequestType.LATE_ENTRY,
+    'Có lịch làm thủ tục tại phòng đào tạo trước giờ học.',
+    RequestStatus.APPROVED,
+    teachers.GV001.id,
+    'Đã duyệt đơn vào muộn.',
+    addMinutes(nextIntSession.sessionDate, 10),
+  );
 
   console.log('✅ Seed QA hoàn tất.');
   console.log('Tài khoản: ADMIN001 / Admin@123; GV001-GV007 / Teacher@123; 21020001-21020024 / Student@123');

@@ -24,7 +24,7 @@
 | Validate import | BE — `backend/src/services/import.service.ts` (main), mức validate chưa rõ | Có parser/validate cơ bản | `backend/src/services/import.service.ts` | Chặn mã trùng, thiếu cột hoặc quan hệ không tồn tại. |
 | Preview/rollback import | BE — `backend/src/services/import.service.ts` (main), chưa đầy đủ | Chưa hoàn thiện preview lỗi và rollback toàn bộ | `backend/src/services/import.service.ts`, admin import UI | Admin cần kiểm tra trước khi áp dụng dữ liệu lớn. |
 | Paging danh sách | FE — `frontend/src/components/admin/` (main), chưa đồng nhất | FE có một số paging/giới hạn | Admin components và API list | Tránh render toàn bộ dữ liệu khi số bản ghi tăng. |
-| Search danh sách/dropdown | FE — `frontend/src/components/admin/*.tsx` (main), chưa đồng nhất | FE đã bổ sung search nhiều danh sách | `frontend/src/components/admin/*.tsx`, `docs/FRONTEND_DROPDOWN_SEARCH_REPORT.md` | Tìm nhanh theo mã/tên thay vì cuộn thủ công. |
+| Search danh sách/dropdown | FE — `frontend/src/components/admin/*.tsx` (main), chưa đồng nhất | FE đã bổ sung search nhiều danh sách | `frontend/src/components/admin/*.tsx` | Tìm nhanh theo mã/tên thay vì cuộn thủ công. |
 
 ## 5.3. Backend/Frontend: lịch học, ca học và calendar
 
@@ -65,11 +65,11 @@
 | Người ngoài roster | AI/BE — `ai-service/main.py` và matching alert chưa có trong main | `UNKNOWN_PERSON` và alert GV | `ai-service/main.py`, `backend/src/realtime/socket.ts` | Người vào sai lớp không bị nhận nhầm. |
 | Capture camera | BE — `backend/src/services/classroom.service.ts` (main), chưa có AI capture | Backend gọi AI capture RTSP và lưu evidence | `backend/src/services/ai-client.service.ts`, `backend/src/services/evidence.service.ts` | Camera xử lý server-side, không lộ RTSP cho FE. |
 | Retry/cảnh báo AI-camera | BE — `backend/src/services/classroom.service.ts` (main), health/camera nền tảng | Có health/error path và cảnh báo | `backend/src/services/admin-ops.service.ts`, `backend/src/services/teacher-session.service.ts` | Biết khi kết quả không đáng tin do hạ tầng. |
-| 15 phút đầu mỗi ca | Doc — `docs/api_documentation.md` (main); BA — trao đổi, chưa có file riêng; state machine chưa có | Có nền tảng capture/rule nhưng chưa hoàn chỉnh từng period | `backend/src/services/teacher-session.service.ts`, `backend/src/utils/study-periods.ts` | Chốt sổ sau cửa sổ ổn định. |
-| Recheck sau giờ nghỉ | Doc — `docs/api_documentation.md` (main); BA — trao đổi phân tích, chưa có file implementation | Mới được thống nhất ở phân tích | Chưa có service/state machine hoàn chỉnh | Phân biệt người đi vệ sinh quay lại với người rời lớp. |
+| 15 phút đầu mỗi ca | Doc — `docs/02-api/api_documentation.md` (main); BA — trao đổi, chưa có file riêng; state machine chưa có | Có nền tảng capture/rule nhưng chưa hoàn chỉnh từng period | `backend/src/services/teacher-session.service.ts`, `backend/src/utils/study-periods.ts` | Chốt sổ sau cửa sổ ổn định. |
+| Recheck sau giờ nghỉ | Doc — `docs/02-api/api_documentation.md` (main); BA — trao đổi phân tích, chưa có file implementation | Mới được thống nhất ở phân tích | Chưa có service/state machine hoàn chỉnh | Phân biệt người đi vệ sinh quay lại với người rời lớp. |
 | Kết thúc sớm | BE — `backend/src/routes/teacher.routes.ts` (main), chưa đủ rule | End session có cảnh báo/chặn và confirm | `backend/src/services/teacher-session.service.ts`, teacher UI | Tránh GV kết thúc khi còn ca học. |
 | Snapshot/evidence | BE — `backend/src/services/evidence.service.ts` (main), nền tảng cũ | Lưu crop/detection/evidence cho GV/SV theo quyền | `backend/src/services/evidence.service.ts`, student/teacher routes | Có bằng chứng hậu kiểm. |
-| GV không nằm trong roster SV | Doc — `docs/api_documentation.md` (main); BA — yêu cầu nghiệp vụ, chưa có rule rõ | Roster chỉ nạp SV của course class | `backend/src/services/teacher-session.service.ts` | Tránh nhận nhầm GV là SV/người học hộ. |
+| GV không nằm trong roster SV | Doc — `docs/02-api/api_documentation.md` (main); BA — yêu cầu nghiệp vụ, chưa có rule rõ | Roster chỉ nạp SV của course class | `backend/src/services/teacher-session.service.ts` | Tránh nhận nhầm GV là SV/người học hộ. |
 
 ## 5.6. Frontend: teacher workspace
 
@@ -116,12 +116,12 @@
 
 | Hạng mục | `main` (nguồn baseline) | Bản hiện tại | Thay đổi ở đâu | Lý do thay đổi |
 |---|---|---|---|---|
-| Public API prefix | Doc — `docs/api_documentation.md` (main); BE — `backend/src/app.ts` (main) | Backend dùng `/api/v1` | `backend/src/app.ts`, `frontend/src/utils/api.ts` | Có versioning và gateway duy nhất. |
-| AI API boundary | Doc — `docs/api_documentation.md` (main), ví dụ public `/api/enroll`/`recognize` | Internal `/internal/v1/*`, chỉ Backend gọi | `ai-service/main.py`, `backend/src/services/ai-client.service.ts` | Không lộ key, roster và RTSP cho browser. |
-| Enrollment request | Doc — `docs/api_documentation.md` (main), `video_file`/flow cũ | Multipart `frames[]`, tối đa 12, FE dùng 8 | `backend/src/routes/ekyc.routes.ts`, `docs/api_documentation.md` | Phù hợp enrollment nhiều ảnh pose. |
-| Student dashboard query | Doc — `docs/api_documentation.md` (main), chưa mô tả tuần rõ | `GET /student/dashboard?weekStart=YYYY-MM-DD` | `backend/src/routes/student.routes.ts`, `StudentDashboard.tsx` | Calendar cần điểm neo tuần. |
-| Teacher schedule query | Doc — `docs/api_documentation.md` (main), có `week/year` | Code dùng `startDate/endDate` | `backend/src/routes/teacher.routes.ts`, `TeacherSchedule.tsx` | Khoảng ngày ISO dễ thống nhất timezone. |
-| AI response | Doc — `docs/api_documentation.md` (main), có thể hiểu AI trả status | AI trả identity/score/pose/quality/bbox/evidence | `ai-service/main.py`, `docs/AI_BE_MVP_HANDOFF.md` | BE áp rule thời gian, leave, hậu kiểm/audit. |
+| Public API prefix | Doc — `docs/02-api/api_documentation.md` (main); BE — `backend/src/app.ts` (main) | Backend dùng `/api/v1` | `backend/src/app.ts`, `frontend/src/utils/api.ts` | Có versioning và gateway duy nhất. |
+| AI API boundary | Doc — `docs/02-api/api_documentation.md` (main), ví dụ public `/api/enroll`/`recognize` | Internal `/internal/v1/*`, chỉ Backend gọi | `ai-service/main.py`, `backend/src/services/ai-client.service.ts` | Không lộ key, roster và RTSP cho browser. |
+| Enrollment request | Doc — `docs/02-api/api_documentation.md` (main), `video_file`/flow cũ | Multipart `frames[]`, tối đa 12, FE dùng 8 | `backend/src/routes/ekyc.routes.ts`, `docs/02-api/api_documentation.md` | Phù hợp enrollment nhiều ảnh pose. |
+| Student dashboard query | Doc — `docs/02-api/api_documentation.md` (main), chưa mô tả tuần rõ | `GET /student/dashboard?weekStart=YYYY-MM-DD` | `backend/src/routes/student.routes.ts`, `StudentDashboard.tsx` | Calendar cần điểm neo tuần. |
+| Teacher schedule query | Doc — `docs/02-api/api_documentation.md` (main), có `week/year` | Code dùng `startDate/endDate` | `backend/src/routes/teacher.routes.ts`, `TeacherSchedule.tsx` | Khoảng ngày ISO dễ thống nhất timezone. |
+| AI response | Doc — `docs/02-api/api_documentation.md` (main), có thể hiểu AI trả status | AI trả identity/score/pose/quality/bbox/evidence | `ai-service/main.py`, `docs/02-api/api_documentation.md` | BE áp rule thời gian, leave, hậu kiểm/audit. |
 | Response envelope/error | BE — `backend/src/app.ts` (main), chưa thống nhất | `{success,data}`, Axios unwrap ở FE | `backend/src/app.ts`, `frontend/src/utils/api.ts` | Tách wire contract và client data. |
 | Evidence access | BE — `backend/src/routes/student.routes.ts`, `teacher.routes.ts`, `admin.routes.ts` (main), policy chưa rõ | Route theo role/user | `backend/src/routes/student.routes.ts`, `teacher.routes.ts`, `admin.routes.ts` | Chặn xem ảnh/evidence trái quyền. |
 | Socket.IO | FE — `frontend/src/utils/socket.ts` (main); BE — chưa có realtime đầy đủ | Realtime session/attendance/unknown | `backend/src/realtime/socket.ts`, `frontend/src/utils/socket.ts` | Cập nhật scan không cần refresh. |

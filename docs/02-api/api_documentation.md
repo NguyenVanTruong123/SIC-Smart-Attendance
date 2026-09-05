@@ -1251,7 +1251,7 @@ Backend phát event Socket.IO `attendance:frame_captured` để FE hiển thị 
 
 Local Docker mặc định dùng `DEMO_MODE=true`, `LATE_CUTOFF_MINUTES=1` và `AI_CAPTURE_INTERVAL_MS=3000`. Nút điểm danh gọi capture ngay; không chờ đến giờ lịch. Nút kết thúc thực hiện capture cuối rồi chốt session, không bị khóa bởi `EARLY_END_MINUTES` trong demo.
 
-Xem flow chi tiết tại `docs/AI_MVP_DEMO_FLOW.md`.
+Xem flow chi tiết tại `docs/03-ai/AI_MVP_DEMO_FLOW.md`.
 
 ### 7.6. Camera browser cho demo
 
@@ -1268,8 +1268,8 @@ BE chuyển file qua `aiClientService.recognize()`; AI vẫn nhận roster của
 
 Với phòng RTSP, request JSON cũ tới cùng endpoint vẫn giữ nguyên. `GET /api/v1/teacher/sessions/resolve?courseCode={course_code}` cho phép giáo viên tra cứu phiên thuộc môn mình phụ trách rồi mở camera không cần nhập UUID session.
 
-Chi tiết thay đổi và checklist QA: `docs/CAMERA_WEBCAM_ATTENDANCE_REPORT.md`.
+Chi tiết thay đổi và checklist QA: `docs/03-ai/CAMERA_WEBCAM_ATTENDANCE_REPORT.md`.
 
 ---
-*Đây là tài liệu API tổng hợp; khi có khác biệt, contract ở mục 7.4 và `docs/AI_MVP_DEMO_FLOW.md` phản ánh implementation hiện tại của AI MVP.*
+*Đây là tài liệu API tổng hợp; khi có khác biệt, contract ở mục 7.4 và `docs/03-ai/AI_MVP_DEMO_FLOW.md` phản ánh implementation hiện tại của AI MVP.*
 

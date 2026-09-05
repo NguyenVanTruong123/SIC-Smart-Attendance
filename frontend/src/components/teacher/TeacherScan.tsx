@@ -35,7 +35,7 @@ interface EvidenceSnapshot {
   snapshotUrl: string;
 }
 
-const CHECKPOINT_SCAN_WINDOW_MS = 5_000;
+const CHECKPOINT_SCAN_WINDOW_MS = 60_000;
 const CHECKPOINT_SCAN_INTERVAL_MS = 1_000;
 
 function captureVideoFrame(video: HTMLVideoElement) {
@@ -348,7 +348,7 @@ export function TeacherScan({ initialSessionId }: { initialSessionId?: string })
           <Button onClick={runAttendanceNow} loading={actionLoading} disabled={!sessionId}>Điểm danh ngay</Button>
           <Button danger onClick={endSession} loading={actionLoading} disabled={!sessionId || (data?.session?.status !== "LIVE_NOW" && data?.session?.status !== "DEGRADED")}>Kết thúc</Button>
         </div>
-        {data?.session && <p className="scan-session-caption">{data.session.courseName} · {data.session.roomCode} · {data.session.status}{isBrowserCamera && " · Quét tối đa 5 giây mỗi lần bấm"}</p>}
+        {data?.session && <p className="scan-session-caption">{data.session.courseName} · {data.session.roomCode} · {data.session.status}{isBrowserCamera && " · Quét tối đa 1 phút mỗi lần bấm"}</p>}
       </Card>
 
       {isError && <Alert className="portal-alert" type="warning" showIcon message="Chưa tải được ca học" description="Backend chưa cung cấp endpoint GET /api/v1/teacher/sessions/:id theo tài liệu." />}

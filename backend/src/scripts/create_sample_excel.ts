@@ -2,7 +2,7 @@ import * as xlsx from 'xlsx';
 import * as path from 'path';
 import * as fs from 'fs';
 
-const sampleDir = path.join(__dirname, '../../sample_data');
+const sampleDir = path.join(__dirname, '../../../data/import-samples');
 if (!fs.existsSync(sampleDir)) {
   fs.mkdirSync(sampleDir, { recursive: true });
 }
@@ -128,4 +128,4 @@ const wbSchedule = xlsx.utils.book_new();
 xlsx.utils.book_append_sheet(wbSchedule, wsSchedule, 'ThoiKhoaBieu');
 xlsx.writeFile(wbSchedule, path.join(sampleDir, 'schedule_sample.xlsx'));
 
-console.log('✅ Đã tạo thành công 3 file Excel mẫu trong backend/sample_data!');
+console.log('✅ Đã tạo thành công 3 file Excel mẫu trong data/import-samples!');

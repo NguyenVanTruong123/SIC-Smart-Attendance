@@ -305,7 +305,7 @@ Chỉ đánh dấu “BA Final complete” khi đồng thời thỏa các điề
 
 Bản hiện tại **không thiếu nền tảng**, nhưng đang ở mức **core demo / pre-pilot**, chưa phải BA Final hoàn chỉnh. Phần cần ưu tiên không phải thêm UI mới trước, mà là chốt contract và làm chắc 4 trục: **roster-scoped recognition, session state machine, evidence ownership, RBAC/error contract**. Sau đó mới bổ sung anti-spoof chuyên dụng, re-eKYC có phê duyệt, teacher exclusion, export và production infrastructure.
 
-Các tài liệu cũ như `docs/backend_missing_features.md` và các report lịch sử không nên dùng làm source of truth nếu mâu thuẫn với code hiện tại hoặc BA Final. File này là baseline đối chiếu cho QA và review tiếp theo; mỗi thay đổi sau này nên cập nhật thêm bảng API/status và acceptance evidence tương ứng.
+Các tài liệu cũ như `docs/04-qa/archive/backend_missing_features.md` và các report lịch sử không nên dùng làm source of truth nếu mâu thuẫn với code hiện tại hoặc BA Final. File này là baseline đối chiếu cho QA và review tiếp theo; mỗi thay đổi sau này nên cập nhật thêm bảng API/status và acceptance evidence tương ứng.
 
 ## 12. Những điểm đã thay thế so với BA
 
@@ -322,7 +322,7 @@ Phần này phân biệt rõ ba trường hợp:
 | API AI công khai dưới `/api/v1/ai/*` | BE làm gateway, gọi AI bằng `AI_SERVICE_URL` và internal key | Thay thế hợp lý | Frontend không gọi thẳng AI, phù hợp phân quyền. Cần thống nhất payload và error contract giữa BE–AI. |
 | ArcFace 512D + FAISS | `facenet-pytorch`/FaceNet tạo vector, NumPy cosine, roster trong memory và `gallery.npz` | Thay thế tạm thời cho MVP | Có thể demo recognition theo roster, nhưng chưa tương đương về model, tốc độ và persistence. Cần benchmark và thay bằng model/index production trước pilot. |
 | FAISS lưu vector lâu dài | `UserBiometric` lưu metadata/vector ID; AI nạp roster khi session start và giữ `ROSTERS` trong memory | Thay thế tạm thời | Restart AI có thể mất roster runtime. Phải rebuild từ DB hoặc dùng FAISS/vector DB có version trước production. |
-| RTSP live stream 30 FPS và AI xử lý realtime | AI mở RTSP, đọc một frame theo `AI_CAPTURE_INTERVAL_MS`, mặc định khoảng 5 giây; FE nhận event Socket.IO | Thay thế tạm thời | Đây là snapshot polling, không phải video live 30 FPS. Có thể dùng cho MVP ít phòng nếu BA chấp nhận; không được ghi là live 30 FPS. |
+| RTSP live stream 30 FPS và AI xử lý realtime | AI mở RTSP, đọc một frame theo `AI_CAPTURE_INTERVAL_MS`; checkpoint thủ công quét tối đa 1 phút và dừng sớm khi đủ roster; FE nhận event Socket.IO | Thay thế tạm thời | Đây là snapshot polling, không phải video live 30 FPS. Có thể dùng cho MVP ít phòng nếu BA chấp nhận; không được ghi là live 30 FPS. |
 | Snapshot cố định tại 15/30/45/60 phút | Đề xuất checkpoint sau giờ nghỉ và lần cuối khi kết thúc buổi | Thay thế nghiệp vụ cho MVP | Phù hợp mục tiêu phát hiện SV rời lớp hơn 4 ảnh cố định; cần BA xác nhận số checkpoint, thời điểm và bằng chứng bắt buộc. |
 | Một ảnh gốc enrollment | Backend lưu nhiều `UserEnrollmentImage` từ các frame enrollment; AI vẫn có preview crop | Thay thế hợp lý theo yêu cầu mới | Phù hợp yêu cầu lưu toàn bộ 8–12 ảnh. UI/admin phải hiển thị rõ số lượng và pose từng ảnh. |
 | Bốn trạng thái hiển thị điểm danh | Schema có thêm `UNCONFIRMED`, `TRUANT`, `EXCUSED` ngoài `PRESENT`, `LATE`, `ABSENT` | Mở rộng hợp lý | Sáu trạng thái nội bộ phục vụ nghiệp vụ chi tiết. Cần chốt mapping trạng thái nào hiển thị cho giáo viên/sinh viên. |

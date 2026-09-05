@@ -1,6 +1,8 @@
-# 📋 TỔNG HỢP CÁC CHỨC NĂNG BACKEND & AI SERVICE CÒN THIẾU
+# 📋 TỔNG HỢP CŨ CÁC CHỨC NĂNG BACKEND & AI SERVICE CÒN THIẾU
+
+> Tài liệu lưu trữ để tham khảo lịch sử. Không dùng làm trạng thái triển khai hiện tại.
 ### Dự án: Smart Passive Attendance System (SPAS v6.0 Final)
-*Tài liệu đối soát giữa Frontend (`/frontend`), Backend (`/backend`), AI Service (`/ai-service`) và Đặc tả hệ thống (`/docs/api_documentation.md`).*
+*Tài liệu lịch sử đối soát giữa Frontend (`/frontend`), Backend (`/backend`), AI Service (`/ai-service`) và API (`/docs/02-api/api_documentation.md`). Không dùng file này thay cho trạng thái code hiện tại nếu có khác biệt.*
 
 ---
 
@@ -10,7 +12,7 @@
 |---|---|---|
 | **Frontend** | React 19 + TypeScript + Ant Design v5 + TailwindCSS + Zustand + TanStack Query + Socket.io | **100% hoàn thiện** (Auth, eKYC Onboarding, Admin Dashboard, Teacher Scan/Live/Reports, Student Portal). Đã sẵn sàng kết nối API & WebSocket. |
 | **Backend API Gateway** | Node.js (Express + TypeScript + Prisma ORM + PostgreSQL/Supabase) | **~30% hoàn thiện** (Đã có Auth Login/Me, Admin Biometrics Overview, Import Excel 3-in-1, Classrooms CRUD + Ping Camera). Chưa có các routes Teacher, Student, eKYC, Audit Logs, Socket.io Server. |
-| **AI Core Service** | Python 3.10+ (FastAPI + InsightFace / ArcFace + FAISS + ByteTrack + OpenCV) | **0% triển khai** (Mới chỉ có file `ai-service/README.md`, chưa có code `main.py`, models, worker xử lý luồng RTSP). |
+| **AI Core Service** | Python 3.10+ (FastAPI + InsightFace / ArcFace + FAISS + ByteTrack + OpenCV) | Nội dung lịch sử; đối chiếu hiện tại xem `docs/01-product/BA_FINAL_VS_CURRENT_IMPLEMENTATION_QA_REPORT.md`. |
 
 ---
 

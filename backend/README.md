@@ -1,23 +1,24 @@
-# ⚙️ Backend Web API Service
+# Backend API Service
 
-Hệ thống API RESTful và WebSocket phục vụ nghiệp vụ điểm danh, phân quyền RBAC, quản lý sinh trắc học và tích hợp CSDL Supabase PostgreSQL.
+API REST/WebSocket cho các nghiệp vụ trong backlog BA: RBAC, đào tạo, lịch học, điểm danh, sinh trắc học, import và audit.
 
 ## 🛠️ Công nghệ sử dụng
 - **Runtime:** Node.js (Express.js / TypeScript)
-- **Database & ORM:** PostgreSQL (Supabase) + Prisma ORM
+- **Database & ORM:** PostgreSQL + Prisma ORM
 - **Authentication:** JWT (JSON Web Token) + RBAC Middleware
-- **Cache & Queue:** Redis + BullMQ (Quản lý hàng đợi nhận diện ảnh)
 - **Realtime:** Socket.io / WebSocket
 
 ## 🚀 Khởi chạy
 ```bash
 # 1. Cài đặt dependencies
-npm install
+pnpm install
 
 # 2. Đồng bộ Prisma Schema
-npx prisma generate
-npx prisma db push
+pnpm prisma:generate
+pnpm prisma:push
 
 # 3. Chạy môi trường development
-npm run dev
+pnpm dev
 ```
+
+File Excel mẫu để test import nằm ở `../data/import-samples/`.

@@ -9,6 +9,7 @@ const demoMode = process.env.DEMO_MODE !== 'false';
 const lateCutoffMinutes = Number(process.env.LATE_CUTOFF_MINUTES || (demoMode ? 1 : 15));
 const earlyEndMinutes = demoMode ? 0 : Number(process.env.EARLY_END_MINUTES || 30);
 const unknownEvidenceCooldownMs = 5_000;
+const checkpointScanWindowMs = 60_000;
 
 export type CaptureMode = 'OBSERVE' | 'CHECKPOINT' | 'FINAL';
 
@@ -211,7 +212,7 @@ export class TeacherSessionService {
         recognition = await aiClientService.captureRtsp(session.id, session.classroom.rtspUrl);
       } else {
         this.checkpointFaces.delete(session.id);
-        const deadline = Date.now() + 5_000;
+        const deadline = Date.now() + checkpointScanWindowMs;
         const enrolledCount = session.courseClass.enrollments.filter(({ student }) => student.isFaceEnrolled).length;
         do {
           recognition = await aiClientService.captureRtsp(session.id, session.classroom.rtspUrl);

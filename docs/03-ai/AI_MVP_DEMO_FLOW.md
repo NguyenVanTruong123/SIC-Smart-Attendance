@@ -9,7 +9,7 @@ Giáo viên chọn session
         ↓
 Bấm “Điểm danh ngay”
         ↓
-Backend mở session và bắt đầu cửa sổ quét tối đa 5 giây
+Backend mở session và bắt đầu cửa sổ quét tối đa 1 phút
         ↓
 AI đọc nhiều frame, dừng sớm khi đã nhận đủ roster
         ↓
@@ -131,7 +131,7 @@ Nút **Điểm danh ngay** thực hiện một flow đầy đủ:
 
 1. Nếu session chưa live, gọi `POST /api/v1/teacher/sessions/{id}/start`.
 2. Backend nạp roster và tạo các `AttendanceLog` ở trạng thái `UNCONFIRMED`.
-3. FE/Backend quét tối đa 5 giây, không chờ timer 15 phút.
+3. FE/Backend quét tối đa 1 phút, không chờ timer 15 phút.
 4. AI trả frame, BBox và recognition; nếu đã nhận đủ roster thì dừng sớm.
 5. Backend chốt mốc ảo `15m`: mặt đã nhận diện là `PRESENT`, không thấy là `ABSENT`; lưu crop và phát Socket.IO events.
 6. FE cập nhật thống kê, bảng sinh viên, ảnh camera và BBox.
@@ -213,7 +213,7 @@ Các event FE dùng:
 
 ## 9. QA checklist nhanh
 
-- Bấm lần đầu khi session chưa live: session tự mở, quét tối đa 5 giây rồi chốt mốc `15m`.
+- Bấm lần đầu khi session chưa live: session tự mở, quét tối đa 1 phút rồi chốt mốc `15m`.
 - Bấm lần đầu trước giờ học: không bị chặn bởi giờ hệ thống trong demo.
 - Bấm lần hai khi session live: chốt mốc `30m`, có frame mới và không tạo attendance log trùng.
 - Sinh viên vắng ở mốc trước nhưng được nhận diện ở mốc sau: chuyển lại `PRESENT`.

@@ -48,6 +48,7 @@ export function Enrollment() {
   const [poseConfidence, setPoseConfidence] = useState(0);
   const [poseMessage, setPoseMessage] = useState("Bấm bắt đầu để hệ thống theo dõi tư thế.");
   const [enrolled, setEnrolled] = useState(user.isFaceEnrolled);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const stopCamera = useCallback(() => {
     if (videoRef.current?.srcObject) {
@@ -191,6 +192,7 @@ export function Enrollment() {
   const submitFrames = async () => {
     if (!capturedFrames.length) return;
     setSubmitting(true);
+    setSubmitError(null);
 
     try {
       const formData = new FormData();
@@ -209,7 +211,12 @@ export function Enrollment() {
       stopCamera();
       message.success("Đăng ký khuôn mặt thành công.");
     } catch (cause) {
-      message.error(cause instanceof Error ? cause.message : "Đăng ký khuôn mặt thất bại.");
+      const rawMessage = cause instanceof Error ? cause.message : "Đăng ký khuôn mặt thất bại.";
+      const errorMessage = rawMessage.toLowerCase().includes("already enrolled for another account")
+        ? "Khuôn mặt này đã được đăng ký cho tài khoản khác. Mỗi khuôn mặt chỉ được gắn với một tài khoản; hãy nhờ admin reset tài khoản cũ nếu đây là tài khoản cần dùng."
+        : rawMessage;
+      setSubmitError(errorMessage);
+      message.error(errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -310,6 +317,17 @@ export function Enrollment() {
             </Button>
           )}
         </div>
+        {submitError && (
+          <Alert
+            className="enrollment-error"
+            type="error"
+            showIcon
+            closable
+            onClose={() => setSubmitError(null)}
+            message="Không thể gửi xác thực"
+            description={submitError}
+          />
+        )}
         <Alert
           className="enrollment-note"
           type="info"
