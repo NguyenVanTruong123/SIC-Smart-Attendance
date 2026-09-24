@@ -2,6 +2,8 @@ import prisma from '../config/prisma';
 import { SessionStatus } from '@prisma/client';
 import { periodLabel } from '../utils/study-periods';
 
+const demoMode = process.env.DEMO_MODE !== 'false';
+
 export interface TeacherScheduleFilter {
   teacherId: string;
   startDate: Date;
@@ -22,10 +24,12 @@ export class TeacherService {
         courseClass: {
           teacherId,
         },
-        sessionDate: {
-          gte: startDate,
-          lte: endDate,
-        },
+        ...(demoMode ? {} : {
+          sessionDate: {
+            gte: startDate,
+            lte: endDate,
+          },
+        }),
       },
       include: {
         classroom: true,
@@ -154,6 +158,7 @@ export class TeacherService {
     return {
       startDate: startDate.toISOString().split('T')[0],
       endDate: endDate.toISOString().split('T')[0],
+      demoMode,
       totalSessions: formattedSessions.length,
       sessions: formattedSessions,
     };

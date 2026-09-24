@@ -24,6 +24,7 @@ export interface TeacherCalendarSession {
 interface TeacherScheduleResponse {
   startDate: string;
   endDate: string;
+  demoMode?: boolean;
   totalSessions: number;
   sessions: TeacherCalendarSession[];
 }
@@ -77,6 +78,7 @@ export function TeacherSchedule({ onStartScan }: { onStartScan: (sessionId: stri
       </div>
 
       <Card className="portal-card" title={`Lịch dạy tuần · ${range}`}>
+        {data?.demoMode && <Alert type="info" showIcon message="Chế độ demo đang bật" description="Có thể mở và điểm danh bất kỳ lớp nào của giảng viên, không cần chờ đúng ngày hoặc giờ trong lịch." />}
         {isError && <Alert type="warning" showIcon message="Chưa tải được lịch dạy" description="Backend chưa phản hồi dữ liệu lịch dạy cho khoảng thời gian đã chọn." />}
         {isLoading ? (
           <div className="portal-loading"><Spin /></div>

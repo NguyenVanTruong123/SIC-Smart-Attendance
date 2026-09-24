@@ -10,6 +10,7 @@ const lateCutoffMinutes = Number(process.env.LATE_CUTOFF_MINUTES || (demoMode ? 
 const earlyEndMinutes = demoMode ? 0 : Number(process.env.EARLY_END_MINUTES || 30);
 const unknownEvidenceCooldownMs = 5_000;
 const checkpointScanWindowMs = 60_000;
+const checkpointMatchConfirmationCount = 5;
 
 export type CaptureMode = 'OBSERVE' | 'CHECKPOINT' | 'FINAL';
 
@@ -27,7 +28,8 @@ export class TeacherSessionService {
   private readonly captureTimers = new Map<string, NodeJS.Timeout>();
   private readonly captureInFlight = new Set<string>();
   private readonly unknownEvidenceAt = new Map<string, number>();
-  private readonly checkpointFaces = new Map<string, Map<string, RecognitionFrame['faces'][number]>>();
+  private readonly checkpointFaces = new Map<string, Map<string, { face: RecognitionFrame['faces'][number]; observations: number }>>();
+  private readonly checkpointUnknownFaces = new Map<string, Map<string, RecognitionFrame['faces'][number]>>();
   private scheduler?: NodeJS.Timeout;
 
   startScheduler() {
@@ -73,20 +75,40 @@ export class TeacherSessionService {
   }
 
   private collectCheckpointFaces(sessionId: string, faces: RecognitionFrame['faces']) {
-    const collected = this.checkpointFaces.get(sessionId) || new Map<string, RecognitionFrame['faces'][number]>();
+    const collected = this.checkpointFaces.get(sessionId) || new Map<string, { face: RecognitionFrame['faces'][number]; observations: number }>();
+    const unknownFaces = this.checkpointUnknownFaces.get(sessionId) || new Map<string, RecognitionFrame['faces'][number]>();
+    const observedStudentIds = new Set<string>();
     for (const face of faces) {
-      if (face.result !== 'MATCHED' || !face.studentId) continue;
+      if (face.result !== 'MATCHED' || !face.studentId) {
+        const key = `unknown:${Math.round(face.bbox.x / 64)}:${Math.round(face.bbox.y / 64)}:${Math.round(face.bbox.width / 64)}:${Math.round(face.bbox.height / 64)}`;
+        const previousUnknown = unknownFaces.get(key);
+        if (!previousUnknown || face.score >= previousUnknown.score) unknownFaces.set(key, face);
+        continue;
+      }
+      if (observedStudentIds.has(face.studentId)) continue;
+      observedStudentIds.add(face.studentId);
       const previous = collected.get(face.studentId);
-      if (!previous || face.score >= previous.score) collected.set(face.studentId, face);
+      collected.set(face.studentId, {
+        face: !previous || face.score >= previous.face.score ? face : previous.face,
+        observations: (previous?.observations || 0) + 1,
+      });
     }
     this.checkpointFaces.set(sessionId, collected);
+    this.checkpointUnknownFaces.set(sessionId, unknownFaces);
     return collected;
   }
 
   private consumeCheckpointFaces(sessionId: string, faces: RecognitionFrame['faces']) {
     const collected = this.collectCheckpointFaces(sessionId, faces);
-    const merged = [...collected.values(), ...faces.filter((face) => face.result !== 'MATCHED' || !face.studentId)];
+    const unknownFaces = this.checkpointUnknownFaces.get(sessionId) || new Map<string, RecognitionFrame['faces'][number]>();
+    const merged = [
+      ...[...collected.values()]
+        .filter(({ observations }) => observations >= checkpointMatchConfirmationCount)
+        .map(({ face }) => face),
+      ...unknownFaces.values(),
+    ];
     this.checkpointFaces.delete(sessionId);
+    this.checkpointUnknownFaces.delete(sessionId);
     return merged;
   }
 
@@ -127,10 +149,21 @@ export class TeacherSessionService {
     return session;
   }
 
+  private async loadSessionRoster(session: AuthorizedSession) {
+    const roster = session.courseClass.enrollments.map((enrollment) => enrollment.student);
+    const enrolled = roster.filter((student) => student.isFaceEnrolled);
+    if (!enrolled.length) throw serviceError('Lớp chưa có sinh viên nào hoàn tất đăng ký khuôn mặt.', 422);
+
+    const rosterVersion = `${session.createdAt.toISOString()}:${enrolled.length}`;
+    await aiClientService.loadRoster(session.id, rosterVersion, enrolled.map((student) => student.userCode));
+    return { roster, rosterVersion };
+  }
+
   private async resetCompletedDemoSession(sessionId: string) {
     this.stopCaptureLoop(sessionId);
     this.unknownEvidenceAt.delete(sessionId);
     this.checkpointFaces.delete(sessionId);
+    this.checkpointUnknownFaces.delete(sessionId);
     await aiClientService.unloadRoster(sessionId).catch(() => undefined);
     await prisma.$transaction(async (tx) => {
       await tx.attendanceLog.updateMany({
@@ -165,12 +198,7 @@ export class TeacherSessionService {
       session = await this.getAuthorizedSession(sessionId, actorId, actorRole);
     }
 
-    const roster = session.courseClass.enrollments.map((enrollment) => enrollment.student);
-    const enrolled = roster.filter((student) => student.isFaceEnrolled);
-    if (!enrolled.length) throw serviceError('Lớp chưa có sinh viên nào hoàn tất đăng ký khuôn mặt.', 422);
-
-    const rosterVersion = `${session.createdAt.toISOString()}:${enrolled.length}`;
-    await aiClientService.loadRoster(session.id, rosterVersion, enrolled.map((student) => student.userCode));
+    const { roster, rosterVersion } = await this.loadSessionRoster(session);
 
     if (session.status === SessionStatus.LIVE_NOW) return this.getDetail(sessionId, actorId, actorRole);
 
@@ -194,6 +222,7 @@ export class TeacherSessionService {
       });
     });
     this.checkpointFaces.delete(session.id);
+    this.checkpointUnknownFaces.delete(session.id);
     if (!demoMode && !isBrowserCameraUrl(session.classroom.rtspUrl)) {
       this.startCaptureLoop(session.id, actorId, actorRole);
     }
@@ -205,6 +234,7 @@ export class TeacherSessionService {
     if (session.status !== SessionStatus.LIVE_NOW && session.status !== SessionStatus.DEGRADED) throw serviceError('Cần mở phiên điểm danh trước khi quét camera.', 409);
     if (!session.classroom.rtspUrl) throw serviceError('Phòng học chưa có RTSP camera.', 422);
     if (isBrowserCameraUrl(session.classroom.rtspUrl)) throw serviceError('Phòng học đang dùng webcam trình duyệt. Hãy gửi frame từ máy giáo viên.', 409);
+    await this.loadSessionRoster(session);
 
     let recognition: RecognitionFrame;
     try {
@@ -212,12 +242,20 @@ export class TeacherSessionService {
         recognition = await aiClientService.captureRtsp(session.id, session.classroom.rtspUrl);
       } else {
         this.checkpointFaces.delete(session.id);
+        this.checkpointUnknownFaces.delete(session.id);
         const deadline = Date.now() + checkpointScanWindowMs;
-        const enrolledCount = session.courseClass.enrollments.filter(({ student }) => student.isFaceEnrolled).length;
         do {
           recognition = await aiClientService.captureRtsp(session.id, session.classroom.rtspUrl);
           await this.processRecognition(session, actorId, actorRole, recognition, true, 'OBSERVE');
-          if ((this.checkpointFaces.get(session.id)?.size || 0) >= enrolledCount || Date.now() >= deadline) break;
+          const collected = this.checkpointFaces.get(session.id);
+          const currentStudentIds = new Set(
+            recognition.faces
+              .filter((face) => face.result === 'MATCHED' && face.studentId)
+              .map((face) => face.studentId as string),
+          );
+          const currentFacesConfirmed = currentStudentIds.size > 0
+            && [...currentStudentIds].every((studentId) => (collected?.get(studentId)?.observations || 0) >= checkpointMatchConfirmationCount);
+          if (currentFacesConfirmed || Date.now() >= deadline) break;
           await new Promise((resolve) => setTimeout(resolve, Math.min(1_000, deadline - Date.now())));
         } while (true);
       }
@@ -232,6 +270,7 @@ export class TeacherSessionService {
   async captureImage(sessionId: string, actorId: string, actorRole: UserRole, image: Express.Multer.File, mode: CaptureMode = 'CHECKPOINT') {
     const session = await this.getAuthorizedSession(sessionId, actorId, actorRole);
     if (session.status !== SessionStatus.LIVE_NOW && session.status !== SessionStatus.DEGRADED) throw serviceError('Cần mở phiên điểm danh trước khi quét camera.', 409);
+    await this.loadSessionRoster(session);
 
     try {
       const recognition = await aiClientService.recognize(session.id, image);
@@ -479,6 +518,7 @@ export class TeacherSessionService {
     this.stopCaptureLoop(sessionId);
     this.unknownEvidenceAt.delete(sessionId);
     this.checkpointFaces.delete(sessionId);
+    this.checkpointUnknownFaces.delete(sessionId);
     await prisma.$transaction(async (tx) => {
       await tx.attendanceLog.updateMany({ where: { sessionId, status: AttendanceStatus.UNCONFIRMED }, data: { status: AttendanceStatus.ABSENT } });
       await tx.classSession.update({ where: { id: sessionId }, data: { status: SessionStatus.COMPLETED, endedAt: new Date() } });

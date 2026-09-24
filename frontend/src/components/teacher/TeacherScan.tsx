@@ -37,6 +37,7 @@ interface EvidenceSnapshot {
 
 const CHECKPOINT_SCAN_WINDOW_MS = 60_000;
 const CHECKPOINT_SCAN_INTERVAL_MS = 1_000;
+const CHECKPOINT_MATCH_CONFIRMATION_COUNT = 5;
 
 function captureVideoFrame(video: HTMLVideoElement) {
   return new Promise<Blob>((resolve, reject) => {
@@ -76,6 +77,7 @@ export function TeacherScan({ initialSessionId }: { initialSessionId?: string })
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const captureInFlightRef = useRef(false);
   const confirmedCodesRef = useRef(new Set<string>());
+  const confirmedCountsRef = useRef(new Map<string, number>());
 
   useEffect(() => {
     setSessionId(initialSessionId ?? "");
@@ -93,6 +95,7 @@ export function TeacherScan({ initialSessionId }: { initialSessionId?: string })
 
   useEffect(() => {
     confirmedCodesRef.current = new Set();
+    confirmedCountsRef.current = new Map();
   }, [sessionId]);
 
   useEffect(() => {
@@ -235,7 +238,10 @@ export function TeacherScan({ initialSessionId }: { initialSessionId?: string })
       formData.append("mode", mode);
       const result = await postMultipart<TriggerSnapshotResponse>(`/teacher/sessions/${sessionId}/trigger-snapshot`, formData);
       result.faces.forEach((face) => {
-        if (face.result === "MATCHED" && face.studentCode) confirmedCodesRef.current.add(face.studentCode);
+        if (face.result === "MATCHED" && face.studentCode) {
+          confirmedCodesRef.current.add(face.studentCode);
+          if (mode === "OBSERVE") confirmedCountsRef.current.set(face.studentCode, (confirmedCountsRef.current.get(face.studentCode) || 0) + 1);
+        }
       });
       if (result.counts) setLiveCounts(result.counts);
       setLiveFrame({ capturedAt: result.capturedAt, framePreview: result.framePreview, frameWidth: result.frameWidth, frameHeight: result.frameHeight, faces: result.faces });
@@ -255,11 +261,16 @@ export function TeacherScan({ initialSessionId }: { initialSessionId?: string })
 
   const runBrowserCheckpoint = async () => {
     confirmedCodesRef.current = new Set();
-    const rosterSize = data?.students.length ?? 0;
+    confirmedCountsRef.current = new Map();
     const deadline = Date.now() + CHECKPOINT_SCAN_WINDOW_MS;
     do {
-      await captureBrowserFrame("OBSERVE", true);
-      if (rosterSize > 0 && confirmedCodesRef.current.size >= rosterSize) break;
+      const result = await captureBrowserFrame("OBSERVE", true);
+      const currentMatchedCodes = result?.faces
+        .filter((face) => face.result === "MATCHED" && face.studentCode)
+        .map((face) => face.studentCode as string) ?? [];
+      const currentFacesConfirmed = currentMatchedCodes.length > 0
+        && currentMatchedCodes.every((studentCode) => (confirmedCountsRef.current.get(studentCode) || 0) >= CHECKPOINT_MATCH_CONFIRMATION_COUNT);
+      if (currentFacesConfirmed) break;
       const remaining = deadline - Date.now();
       if (remaining > 0) await new Promise((resolve) => window.setTimeout(resolve, Math.min(CHECKPOINT_SCAN_INTERVAL_MS, remaining)));
     } while (Date.now() < deadline);
