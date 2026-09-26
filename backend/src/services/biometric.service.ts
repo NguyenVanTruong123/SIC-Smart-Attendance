@@ -1,5 +1,7 @@
 import prisma from '../config/prisma';
 import { UserRole, RequestStatus, Prisma } from '@prisma/client';
+import { aiClientService } from './ai-client.service';
+import { evidenceService } from './evidence.service';
 
 export interface BiometricsFilterParams {
   role?: UserRole;
@@ -11,6 +13,114 @@ export interface BiometricsFilterParams {
 }
 
 export class BiometricService {
+  async getBiometricDetail(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        biometricProfile: true,
+        enrollmentImages: { orderBy: { imageIndex: 'asc' } },
+        enrollments: { include: { courseClass: { include: { course: true } } } },
+      },
+    });
+    if (!user) throw Object.assign(new Error('Không tìm thấy người dùng.'), { statusCode: 404 });
+    const storedImages = user.enrollmentImages.length
+      ? user.enrollmentImages
+      : user.biometricProfile?.enrolledFaceUrl
+        ? [{ id: 'legacy-primary', imageIndex: 1, imageUrl: user.biometricProfile.enrolledFaceUrl, mimeType: 'image/jpeg', pose: 'front' }]
+        : [];
+    const enrollmentImages = (await Promise.all(storedImages.map(async (image) => {
+      try {
+        return {
+          id: image.id,
+          imageIndex: image.imageIndex,
+          pose: image.pose,
+          previewBase64: await evidenceService.readDataUrl(image.imageUrl, image.mimeType),
+        };
+      } catch {
+        return null;
+      }
+    }))).filter((image): image is NonNullable<typeof image> => image !== null);
+    const primaryImage = enrollmentImages[0] || null;
+    return {
+      user: {
+        userCode: user.userCode,
+        fullName: user.fullName,
+        role: user.role,
+        department: user.department,
+        className: user.className,
+        vectorId: user.biometricProfile?.faissVectorId ? Number(user.biometricProfile.faissVectorId) : 0,
+        masterImageUrl: '',
+        previewBase64: primaryImage?.previewBase64 || null,
+        enrollmentImages,
+        aiModel: user.biometricProfile?.modelVersion || 'facenet-512d',
+        matchScore: user.biometricProfile?.matchConfidence ? Number(user.biometricProfile.matchConfidence) : null,
+      },
+      recentCctvSnapshots: [],
+      id: user.id,
+      userCode: user.userCode,
+      fullName: user.fullName,
+      role: user.role,
+      department: user.department,
+      className: user.className,
+      isFaceEnrolled: user.isFaceEnrolled,
+      biometric: user.biometricProfile ? {
+        modelVersion: user.biometricProfile.modelVersion,
+        embeddingDimension: user.biometricProfile.embeddingDimension,
+        enrollmentVersion: user.biometricProfile.enrollmentVersion,
+        enrolledAt: user.biometricProfile.lastEnrolledAt,
+        previewUrl: user.biometricProfile.enrolledFaceUrl,
+        previewBase64: primaryImage?.previewBase64 || null,
+        enrollmentImageCount: enrollmentImages.length,
+      } : null,
+      courseClasses: user.enrollments.map((enrollment) => ({
+        id: enrollment.courseClass.id,
+        courseCode: enrollment.courseClass.course.courseCode,
+        courseName: enrollment.courseClass.course.courseName,
+      })),
+    };
+  }
+
+  async readPreview(userId: string) {
+    const profile = await prisma.userBiometric.findUnique({ where: { userId } });
+    if (!profile?.enrolledFaceUrl) throw Object.assign(new Error('Sinh viên chưa có ảnh enrollment.'), { statusCode: 404 });
+    return evidenceService.read(profile.enrolledFaceUrl);
+  }
+
+  async resetBiometric(userId: string, actorId: string, reason: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw Object.assign(new Error('Không tìm thấy người dùng.'), { statusCode: 404 });
+    await aiClientService.resetEnrollment(user.userCode);
+    const [profile, enrollmentImages] = await Promise.all([
+      prisma.userBiometric.findUnique({ where: { userId: user.id }, select: { enrolledFaceUrl: true } }),
+      prisma.userEnrollmentImage.findMany({ where: { userId: user.id }, select: { imageUrl: true } }),
+    ]);
+    const filesToDelete = [...new Set([
+      profile?.enrolledFaceUrl,
+      ...enrollmentImages.map((image) => image.imageUrl),
+    ].filter((file): file is string => Boolean(file)))];
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: user.id }, data: { isFaceEnrolled: false, avatarUrl: null } });
+      await tx.userEnrollmentImage.deleteMany({ where: { userId: user.id } });
+      await tx.userBiometric.updateMany({
+        where: { userId: user.id },
+        data: { faissVectorId: null, enrolledFaceUrl: null, lastEnrolledAt: null, matchConfidence: null },
+      });
+      await tx.systemAuditLog.create({
+        data: {
+          actorId,
+          actionType: 'EKYC_RESET',
+          targetTable: 'users',
+          targetId: user.id,
+          beforeState: { isFaceEnrolled: user.isFaceEnrolled },
+          afterState: { isFaceEnrolled: false },
+          description: reason,
+        },
+      });
+    });
+    await Promise.all(filesToDelete.map((file) => evidenceService.delete(file)));
+    return { userId: user.id, isFaceEnrolled: false };
+  }
+
   /**
    * Lấy danh sách hồ sơ sinh trắc học và tính toán 4 Thẻ KPI thời gian thực
    */

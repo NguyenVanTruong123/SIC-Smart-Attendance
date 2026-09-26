@@ -34,3 +34,24 @@ export const uploadExcel = multer({
     fileSize: 10 * 1024 * 1024, // Tối đa 10MB
   },
 });
+
+export const uploadMedia = multer({
+  storage,
+  limits: { fileSize: 20 * 1024 * 1024, files: 12 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('Chỉ chấp nhận ảnh JPEG hoặc PNG cho eKYC.'));
+  },
+});
+
+export const uploadAttachment = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) => {
+    if (['application/pdf', 'image/jpeg', 'image/png'].includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Tệp minh chứng chỉ hỗ trợ PDF, JPEG hoặc PNG.'));
+  },
+});

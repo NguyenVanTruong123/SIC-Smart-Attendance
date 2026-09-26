@@ -1,52 +1,38 @@
-import { Card, Descriptions, Tag, Avatar, Image, Typography } from "antd";
+import { Avatar, Card, Descriptions, Image, Tag } from "antd";
 import { useAuthStore } from "@/stores/authStore";
 import { roleLabels } from "@/types";
 
-const { Title, Text } = Typography;
-
-// =============================================================================
-// Common: Profile Page — displays current user info from /api/v1/auth/me (§2.3)
-// =============================================================================
-
 export function Profile() {
-  const user = useAuthStore((s) => s.user)!;
+  const user = useAuthStore((state) => state.user)!;
 
   return (
-    <Card>
-      <div className="flex items-center gap-5 mb-6">
-        {user.avatarUrl ? (
-          <Image src={user.avatarUrl} width={80} style={{ borderRadius: "50%", objectFit: "cover" }} alt="Avatar" preview={false} />
-        ) : (
-          <Avatar size={80} style={{ backgroundColor: "#2563eb", fontSize: 32 }}>
-            {user.fullName.charAt(0).toUpperCase()}
-          </Avatar>
-        )}
+    <section aria-labelledby="profile-title">
+      <div className="page-heading">
         <div>
-          <Title level={4} style={{ margin: 0 }}>{user.fullName}</Title>
-          <Tag color="blue">{roleLabels[user.role]}</Tag>
+          <h1 id="profile-title">Hồ sơ tài khoản</h1>
+          <p>Thông tin tài khoản và trạng thái đăng ký khuôn mặt của bạn.</p>
         </div>
       </div>
-
-      <Descriptions bordered column={{ xs: 1, sm: 2 }} size="middle">
-        <Descriptions.Item label="Mã người dùng">{user.userCode}</Descriptions.Item>
-        <Descriptions.Item label="Email">{user.email}</Descriptions.Item>
-        <Descriptions.Item label="Vai trò">{roleLabels[user.role]}</Descriptions.Item>
-        <Descriptions.Item label="Trạng thái tài khoản">
-          <Tag color={user.status === "ACTIVE" ? "success" : "default"}>{user.status ?? "ACTIVE"}</Tag>
-        </Descriptions.Item>
-        {user.department && <Descriptions.Item label="Khoa / Phòng ban">{user.department}</Descriptions.Item>}
-        {user.className && <Descriptions.Item label="Lớp">{user.className}</Descriptions.Item>}
-        <Descriptions.Item label="Xác thực khuôn mặt">
-          <Tag color={user.isFaceEnrolled ? "success" : "error"}>
-            {user.isFaceEnrolled ? "✅ Đã xác thực" : "❌ Chưa xác thực"}
-          </Tag>
-        </Descriptions.Item>
-        {user.createdAt && (
-          <Descriptions.Item label="Ngày tạo tài khoản">
-            {new Date(user.createdAt).toLocaleDateString("vi-VN")}
+      <Card className="portal-card profile-card">
+        <div className="profile-summary">
+          {user.avatarUrl ? <Image preview={false} src={user.avatarUrl} alt="Ảnh hồ sơ" /> : <Avatar size={80}>{user.fullName.slice(0, 1).toUpperCase()}</Avatar>}
+          <div>
+            <h2>{user.fullName}</h2>
+            <p>{roleLabels[user.role]} · {user.userCode}</p>
+            <Tag color={user.status === "ACTIVE" ? "success" : "default"}>{user.status === "ACTIVE" ? "Đang hoạt động" : user.status ?? "Đang hoạt động"}</Tag>
+          </div>
+        </div>
+        <Descriptions bordered column={{ xs: 1, sm: 2 }} size="middle">
+          <Descriptions.Item label="Mã người dùng">{user.userCode}</Descriptions.Item>
+          <Descriptions.Item label="Email">{user.email}</Descriptions.Item>
+          <Descriptions.Item label="Vai trò">{roleLabels[user.role]}</Descriptions.Item>
+          <Descriptions.Item label="Khoa / phòng ban">{user.department ?? "—"}</Descriptions.Item>
+          <Descriptions.Item label="Lớp">{user.className ?? "—"}</Descriptions.Item>
+          <Descriptions.Item label="Khuôn mặt">
+            <Tag color={user.isFaceEnrolled ? "success" : "warning"}>{user.isFaceEnrolled ? "Đã đăng ký" : "Chưa đăng ký"}</Tag>
           </Descriptions.Item>
-        )}
-      </Descriptions>
-    </Card>
+        </Descriptions>
+      </Card>
+    </section>
   );
 }

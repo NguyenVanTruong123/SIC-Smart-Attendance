@@ -1,21 +1,18 @@
-import { Card, Table, Tag, Input, Image, Typography } from "antd";
+import { Alert, Card, Input, Table, Tag, Typography } from "antd";
 import { SearchOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import api from "@/utils/api";
+import { ProtectedImage } from "@/components/common/ProtectedImage";
 import { statusLabels, type AttendanceStatus } from "@/types";
 
 const { Text } = Typography;
-
-// =============================================================================
-// Student: Attendance History — GET /api/v1/student/attendance-history
-// =============================================================================
 
 interface AttendanceRecord {
   date: string;
   courseCode: string;
   courseName: string;
-  room: string;
+  roomCode: string;
   startTime: string;
   endTime: string;
   status: AttendanceStatus;
@@ -25,105 +22,66 @@ interface AttendanceRecord {
 
 export function AttendanceHistory() {
   const [search, setSearch] = useState("");
-
-  const { data, isLoading } = useQuery<AttendanceRecord[]>({
+  const { data, isLoading, isError } = useQuery<AttendanceRecord[]>({
     queryKey: ["student-attendance"],
     queryFn: () => api.get("/student/attendance-history") as Promise<AttendanceRecord[]>,
   });
 
-  const filtered = (data ?? []).filter((r) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      r.courseCode.toLowerCase().includes(q) ||
-      r.courseName.toLowerCase().includes(q) ||
-      r.room.toLowerCase().includes(q) ||
-      r.date.includes(q)
-    );
-  });
+  const records = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase("vi-VN");
+    return (data ?? []).filter((record) => !query || [
+      record.date,
+      record.courseCode,
+      record.courseName,
+      record.roomCode,
+    ].some((value) => value.toLocaleLowerCase("vi-VN").includes(query)));
+  }, [data, search]);
 
   const columns = [
-    {
-      title: "Ngày học",
-      dataIndex: "date",
-      key: "date",
-      width: 110,
-      render: (d: string) => <Text strong>{d}</Text>,
-    },
+    { title: "Ngày", dataIndex: "date", key: "date", width: 115, render: (date: string) => <Text strong>{date}</Text> },
     {
       title: "Học phần",
       key: "course",
-      render: (_: unknown, r: AttendanceRecord) => (
-        <div>
-          <Text strong>{r.courseCode}</Text>
-          <br />
-          <Text type="secondary" className="text-xs">{r.courseName}</Text>
-        </div>
-      ),
+      render: (_: unknown, record: AttendanceRecord) => <div><strong>{record.courseCode}</strong><br /><Text type="secondary">{record.courseName}</Text></div>,
     },
+    { title: "Phòng", dataIndex: "roomCode", key: "roomCode", width: 105 },
     {
-      title: "Phòng / Thời gian",
-      key: "room",
-      render: (_: unknown, r: AttendanceRecord) => (
-        <div>
-          Phòng {r.room}
-          <br />
-          <Text type="secondary" className="text-xs">{r.startTime} – {r.endTime}</Text>
-        </div>
-      ),
-    },
-    {
-      title: "Nhận diện lúc",
-      dataIndex: "firstDetectedAt",
-      key: "firstDetectedAt",
-      width: 120,
-      render: (t?: string) => t ? new Date(t).toLocaleTimeString("vi-VN") : "—",
+      title: "Thời điểm ghi nhận",
+      key: "time",
+      width: 165,
+      render: (_: unknown, record: AttendanceRecord) => record.firstDetectedAt ? new Date(record.firstDetectedAt).toLocaleString("vi-VN") : `${record.startTime}–${record.endTime}`,
     },
     {
       title: "Trạng thái",
       dataIndex: "status",
       key: "status",
-      width: 120,
-      render: (s: AttendanceStatus) => (
-        <Tag className={`status-tag-${s}`}>{statusLabels[s]}</Tag>
-      ),
+      width: 130,
+      render: (status: AttendanceStatus) => <Tag className={`status-tag-${status}`}>{statusLabels[status]}</Tag>,
     },
     {
-      title: "Minh chứng AI",
+      title: "Ảnh xác minh",
       dataIndex: "snapshotUrl",
       key: "snapshotUrl",
-      width: 90,
-      render: (url?: string) =>
-        url ? (
-          <Image src={url} width={48} height={48} style={{ objectFit: "cover", borderRadius: 8 }} alt="Ảnh nhận diện" />
-        ) : (
-          <Text type="secondary" className="text-xs">Không có</Text>
-        ),
+      width: 120,
+      render: (url?: string) => <ProtectedImage width={50} height={50} preview src={url} alt="Ảnh điểm danh" style={{ objectFit: "cover" }} />,
     },
   ];
 
   return (
-    <Card
-      title="Lịch sử điểm danh chi tiết"
-      extra={
-        <Input
-          placeholder="Tìm theo môn, ngày, phòng..."
-          prefix={<SearchOutlined />}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          allowClear
-          style={{ width: 260 }}
-        />
-      }
-    >
-      <Table
-        columns={columns}
-        dataSource={filtered}
-        rowKey={(r, i) => `${r.date}-${r.courseCode}-${i}`}
-        loading={isLoading}
-        pagination={{ pageSize: 15, showSizeChanger: true }}
-        size="middle"
-      />
-    </Card>
+    <section aria-labelledby="attendance-history-title">
+      <div className="page-heading">
+        <div>
+          <h1 id="attendance-history-title">Kết quả điểm danh</h1>
+          <p>Theo dõi các buổi học đã được giảng viên hoặc AI ghi nhận.</p>
+        </div>
+      </div>
+      {isError && <Alert className="portal-alert" type="warning" showIcon message="Chưa tải được lịch sử điểm danh" description="Backend chưa cung cấp endpoint GET /api/v1/student/attendance-history." />}
+      <Card
+        className="portal-card"
+        extra={<Input className="portal-search" value={search} onChange={(event) => setSearch(event.target.value)} prefix={<SearchOutlined />} placeholder="Tìm theo môn, ngày hoặc phòng" allowClear />}
+      >
+        <Table columns={columns} dataSource={records} rowKey={(record, index) => `${record.date}-${record.courseCode}-${index}`} loading={isLoading} pagination={{ pageSize: 10, showSizeChanger: true }} scroll={{ x: 800 }} />
+      </Card>
+    </section>
   );
 }

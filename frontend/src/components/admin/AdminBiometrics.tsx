@@ -19,6 +19,7 @@ import {
   Progress,
   Radio,
   Alert,
+  Avatar,
 } from "antd";
 import {
   SearchOutlined,
@@ -36,6 +37,7 @@ import {
   FileExcelOutlined,
   CloudUploadOutlined,
   CheckSquareFilled,
+  DeleteOutlined,
 } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/utils/api";
@@ -93,6 +95,7 @@ export function AdminBiometrics() {
   const [status, setStatus] = useState("ALL");
   const [page, setPage] = useState(1);
   const [detailUser, setDetailUser] = useState<string | null>(null);
+  const [selectedBiometric, setSelectedBiometric] = useState<BiometricItem | null>(null);
   const [reEkycId, setReEkycId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
@@ -114,7 +117,7 @@ export function AdminBiometrics() {
   });
 
   // Fetch detail
-  const { data: detail } = useQuery<BiometricDetail>({
+  const { data: detail, isError: isDetailUnavailable } = useQuery<BiometricDetail>({
     queryKey: ["admin-biometric-detail", detailUser],
     queryFn: () => api.get(`/admin/biometrics/${detailUser}`) as Promise<BiometricDetail>,
     enabled: !!detailUser,
@@ -138,6 +141,23 @@ export function AdminBiometrics() {
       queryClient.invalidateQueries({ queryKey: ["admin-biometrics"] });
     },
     onError: (err: Error) => message.error(err.message),
+  });
+
+  const { mutate: resetEnrollment, isPending: resettingEnrollment } = useMutation({
+    mutationFn: ({ userId, reason }: { userId: string; reason: string }) =>
+      api.post(`/admin/biometrics/${userId}/reset`, { reason }),
+    onMutate: () => {
+      message.loading({ content: "Đang reset enrollment...", key: "reset-enrollment" });
+    },
+    onSuccess: () => {
+      message.success({ content: "Đã reset enrollment khuôn mặt.", key: "reset-enrollment" });
+      setDetailUser(null);
+      setSelectedBiometric(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-biometrics"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-biometric-detail"] });
+    },
+    onError: (err: Error) =>
+      message.error({ content: err.message || "Không thể reset enrollment khuôn mặt.", key: "reset-enrollment" }),
   });
 
   // Import Excel Mutation
@@ -193,7 +213,17 @@ export function AdminBiometrics() {
       width: 110,
       render: (code: string) => <Text strong>{code}</Text>,
     },
-    { title: "Họ và tên", dataIndex: "fullName", key: "fullName" },
+    {
+      title: "Họ và tên",
+      dataIndex: "fullName",
+      key: "fullName",
+      render: (fullName: string, record: BiometricItem) => (
+        <div className="biometric-person">
+          <Avatar size={34} src={record.avatarUrl}>{fullName.slice(0, 1)}</Avatar>
+          <span>{fullName}</span>
+        </div>
+      ),
+    },
     { title: "Lớp", dataIndex: "className", key: "className", width: 100 },
     { title: "Khoa", dataIndex: "department", key: "department", width: 180, ellipsis: true },
     {
@@ -201,7 +231,7 @@ export function AdminBiometrics() {
       dataIndex: "vectorId",
       key: "vectorId",
       width: 100,
-      render: (v: string) => (v ? <Tag color="blue">{v}</Tag> : "—"),
+      render: (v: string) => (v ? <Tag color="red">{v}</Tag> : "—"),
     },
     {
       title: "eKYC",
@@ -220,8 +250,11 @@ export function AdminBiometrics() {
       width: 180,
       render: (_: unknown, r: BiometricItem) => (
         <div className="flex gap-2">
-          <Button size="small" icon={<EyeOutlined />} onClick={() => setDetailUser(r.id)}>
-            Chi tiết
+          <Button size="small" icon={<EyeOutlined />} onClick={() => {
+            setSelectedBiometric(r);
+            setDetailUser(r.id);
+          }}>
+            Xem hồ sơ
           </Button>
           {r.hasPendingResetRequest && r.pendingRequestId && (
             <Button size="small" type="primary" danger onClick={() => setReEkycId(r.pendingRequestId!)}>
@@ -306,7 +339,6 @@ export function AdminBiometrics() {
             />
             <Button
               type="primary"
-              style={{ background: "#10b981", borderColor: "#10b981" }}
               icon={<UploadOutlined />}
               onClick={() => {
                 setSelectedFile(null);
@@ -349,10 +381,40 @@ export function AdminBiometrics() {
 
       {/* Detail Modal */}
       <Modal
-        title={`Hồ sơ sinh trắc: ${detail?.user?.fullName ?? ""}`}
+        title={`Hồ sơ sinh trắc: ${detail?.user?.fullName ?? selectedBiometric?.fullName ?? ""}`}
         open={!!detailUser}
-        onCancel={() => setDetailUser(null)}
-        footer={null}
+        onCancel={() => {
+          setDetailUser(null);
+          setSelectedBiometric(null);
+        }}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              type="primary"
+              danger
+              icon={<DeleteOutlined />}
+              loading={resettingEnrollment}
+              disabled={!detailUser || resettingEnrollment}
+              onClick={() => {
+                if (!detailUser || resettingEnrollment) return;
+                resetEnrollment({
+                  userId: detailUser,
+                  reason: "Admin reset enrollment từ hồ sơ sinh viên",
+                });
+              }}
+            >
+              Reset enrollment
+            </Button>
+            <Button
+              onClick={() => {
+                setDetailUser(null);
+                setSelectedBiometric(null);
+              }}
+            >
+              Đóng
+            </Button>
+          </div>
+        }
         width={640}
       >
         {detail && (
@@ -363,10 +425,27 @@ export function AdminBiometrics() {
               <Descriptions.Item label="Vector ID">{detail.user.vectorId}</Descriptions.Item>
               <Descriptions.Item label="AI Model">{detail.user.aiModel}</Descriptions.Item>
               <Descriptions.Item label="Match Score">{detail.user.matchScore}%</Descriptions.Item>
-              <Descriptions.Item label="Ảnh gốc">
-                <Image src={detail.user.masterImageUrl} width={80} alt="Master" />
+              <Descriptions.Item label="Ảnh đại diện">
+                <Image src={detail.user.previewBase64 || detail.user.masterImageUrl} width={80} alt="Master" />
               </Descriptions.Item>
             </Descriptions>
+            <Divider>{detail.user.enrollmentImages?.length ?? 0} ảnh gốc enrollment</Divider>
+            {detail.user.enrollmentImages?.length ? (
+              <Image.PreviewGroup>
+                <div className="flex gap-3 flex-wrap">
+                  {detail.user.enrollmentImages.map((image) => (
+                    <div key={image.id} className="flex flex-col gap-1">
+                      <Image src={image.previewBase64} width={120} alt={`Enrollment ${image.imageIndex}`} />
+                      <Text type="secondary" className="text-xs">
+                        {image.pose === "left" ? "Quay trái" : image.pose === "right" ? "Quay phải" : "Nhìn thẳng"} · Ảnh {image.imageIndex}
+                      </Text>
+                    </div>
+                  ))}
+                </div>
+              </Image.PreviewGroup>
+            ) : (
+              <Text type="secondary">Chưa có ảnh gốc enrollment.</Text>
+            )}
             <Divider>3 Ảnh CCTV gần nhất</Divider>
             <div className="flex gap-3 flex-wrap">
               {detail.recentCctvSnapshots.map((snap, i) => (
@@ -383,6 +462,27 @@ export function AdminBiometrics() {
               ))}
             </div>
           </>
+        )}
+        {!detail && selectedBiometric && (
+          <div className="biometric-fallback-profile">
+            <Avatar size={80} src={selectedBiometric.avatarUrl}>{selectedBiometric.fullName.slice(0, 1)}</Avatar>
+            <div>
+              <h3>{selectedBiometric.fullName}</h3>
+              <p>{selectedBiometric.userCode} · {selectedBiometric.className || selectedBiometric.department}</p>
+              <Tag color={selectedBiometric.isFaceEnrolled ? "success" : "default"}>
+                {selectedBiometric.isFaceEnrolled ? "Đã đăng ký khuôn mặt" : "Chưa đăng ký khuôn mặt"}
+              </Tag>
+            </div>
+          </div>
+        )}
+        {isDetailUnavailable && (
+          <Alert
+            className="mt-4"
+            type="warning"
+            showIcon
+            message="Chưa tải được hồ sơ chi tiết"
+            description="Không thể tải dữ liệu chi tiết từ Backend. Hãy thử lại sau."
+          />
         )}
       </Modal>
 

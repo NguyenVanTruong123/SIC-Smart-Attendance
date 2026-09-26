@@ -1,171 +1,161 @@
-import { useState, type FormEvent } from "react";
-import { Button, Input, Form, Typography, Space, Alert, Card, message } from "antd";
-import { UserOutlined, LockOutlined, LoginOutlined } from "@ant-design/icons";
+import { useState } from "react";
+import { Alert, Button, Form, Input, Modal, Typography, message } from "antd";
+import { LockOutlined, LoginOutlined, SearchOutlined, UserOutlined } from "@ant-design/icons";
 import { useAuthStore } from "@/stores/authStore";
 import api from "@/utils/api";
 import type { LoginResponse } from "@/types";
 
 const { Title, Text } = Typography;
 
-// =============================================================================
-// Login Page — POST /api/v1/auth/login
-// =============================================================================
+type QuickAccount = {
+  key: string;
+  label: string;
+  role: "Quản trị viên" | "Giảng viên" | "Sinh viên";
+  username: string;
+  password: string;
+};
+
+const quickAccounts: QuickAccount[] = [
+  { key: "ADMIN001", label: "Quản trị SPAS", role: "Quản trị viên", username: "ADMIN001", password: "Admin@123" },
+  ...[
+    ["GV001", "Nguyễn Minh An"], ["GV002", "Trần Thu Hà"], ["GV003", "Lê Hoài Nam"], ["GV004", "Phạm Thu Huyền"],
+    ["GV005", "Đỗ Quốc Bảo"], ["GV006", "Nguyễn Quỳnh Chi"], ["GV007", "Vũ Trung Đức"],
+  ].map(([username, label]) => ({ key: username, label, role: "Giảng viên" as const, username, password: "Teacher@123" })),
+  ...[
+    ["21020001", "Trần Thị Mai"], ["21020002", "Nguyễn Hoàng Nam"], ["21020003", "Lê Minh Quang"], ["21020004", "Nguyễn Lan Anh"],
+    ["21020005", "Phạm Gia Huy"], ["21020006", "Vũ Ngọc Mai"], ["21020007", "Đỗ Thành Long"], ["21020008", "Hoàng Thu Trang"],
+    ["21020009", "Bùi Khánh Linh"], ["21020010", "Trần Đức Anh"], ["21020011", "Lý Thanh Tùng"], ["21020012", "Ngô Phương Thảo"],
+    ["21020013", "Đặng Nhật Minh"], ["21020014", "Phan Bảo Ngọc"], ["21020015", "Đinh Minh Khoa"], ["21020016", "Mai Thu Hà"],
+    ["21020017", "Lương Quốc Khánh"], ["21020018", "Hà Mỹ Duyên"], ["21020019", "Chu Đức Thành"], ["21020020", "Tạ Thu Phương"],
+    ["21020021", "Nguyễn Gia Hân"], ["21020022", "Võ Minh Tú"], ["21020023", "Lâm Khôi Nguyên"], ["21020024", "Đoàn Thanh Vân"],
+  ].map(([username, label]) => ({ key: username, label, role: "Sinh viên" as const, username, password: "Student@123" })),
+];
+
+const showQuickAccounts = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO_ACCOUNTS === "true";
 
 export function Login() {
-  const [form] = Form.useForm();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [quickAccountsOpen, setQuickAccountsOpen] = useState(false);
+  const [quickAccountSearch, setQuickAccountSearch] = useState("");
   const { login } = useAuthStore();
 
-  const handleFinish = async (values: { username?: string; password?: string }) => {
-    const username = values.username || form.getFieldValue("username");
-    const password = values.password || form.getFieldValue("password");
-
+  const handleFinish = async (values: { username: string; password: string }) => {
     setBusy(true);
     setError("");
-    try {
-      const data = await api.post<LoginResponse>("/auth/login", { username, password });
-      const res = data as unknown as LoginResponse;
-      login(res.accessToken, res.refreshToken, res.user);
-      message.success("Đăng nhập thành công!");
-    } catch (cause: any) {
-      console.warn("Backend login failed, checking demo credentials...", cause);
-      
-      // If backend is not available or credentials match demo, provide smooth demo login
-      if (username === "admin@vnu.edu.vn" || username === "ADMIN001") {
-        login("demo-access-token-admin", "demo-refresh-token", {
-          id: "usr-admin-01",
-          userCode: "ADMIN001",
-          fullName: "Quản Trị Viên Hệ Thống",
-          email: "admin@vnu.edu.vn",
-          role: "ADMIN",
-          department: "Phòng Đào Tạo",
-          isFaceEnrolled: true,
-          status: "ACTIVE",
-        });
-        message.success("Đăng nhập quyền Quản trị viên (Demo Mode)!");
-        return;
-      } else if (username === "gv.nguyenvanan@vnu.edu.vn" || username === "GV001") {
-        login("demo-access-token-teacher", "demo-refresh-token", {
-          id: "usr-teacher-01",
-          userCode: "GV001",
-          fullName: "TS. Nguyễn Văn An",
-          email: "gv.nguyenvanan@vnu.edu.vn",
-          role: "TEACHER",
-          department: "Khoa Công Nghệ Thông Tin",
-          isFaceEnrolled: true,
-          status: "ACTIVE",
-        });
-        message.success("Đăng nhập quyền Giảng viên (Demo Mode)!");
-        return;
-      } else if (username === "21020001@vnu.edu.vn" || username === "21020001") {
-        login("demo-access-token-student", "demo-refresh-token", {
-          id: "usr-student-01",
-          userCode: "21020001",
-          fullName: "Trần Thị Mai",
-          email: "21020001@vnu.edu.vn",
-          role: "STUDENT",
-          className: "21CNTT1",
-          department: "Khoa Công Nghệ Thông Tin",
-          isFaceEnrolled: false,
-          status: "ACTIVE",
-        });
-        message.success("Đăng nhập quyền Sinh viên (Demo Mode)!");
-        return;
-      }
 
+    try {
+      const result = (await api.post("/auth/login", values)) as unknown as LoginResponse;
+      login(result.accessToken, result.refreshToken, result.user);
+      message.success("Đăng nhập thành công.");
+    } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Đăng nhập thất bại.");
     } finally {
       setBusy(false);
     }
   };
 
-  const quickSelect = (user: string, pass: string) => {
-    form.setFieldsValue({ username: user, password: pass });
-    handleFinish({ username: user, password: pass });
+  const handleQuickLogin = (account: QuickAccount) => {
+    if (busy) return;
+    setQuickAccountsOpen(false);
+    void handleFinish({ username: account.username, password: account.password });
   };
+
+  const visibleQuickAccounts = quickAccounts.filter((account) => {
+    const query = quickAccountSearch.trim().toLocaleLowerCase("vi-VN");
+    return !query || [account.label, account.role, account.username].some((value) => value.toLocaleLowerCase("vi-VN").includes(query));
+  });
 
   return (
     <main className="login-page">
-      <div className="login-card">
-        {/* Brand */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-primary text-white text-2xl font-bold shadow-lg">
-            S
-          </div>
-          <div>
-            <Title level={3} style={{ margin: 0, color: "#0f172a" }}>
-              SPAS Academic
-            </Title>
-            <Text type="secondary">Hệ thống điểm danh thụ động</Text>
-          </div>
+      <section className="login-card" aria-labelledby="login-title">
+        <div className="login-heading">
+          <Text className="login-kicker">CỔNG HỌC VỤ</Text>
+          <Title id="login-title" level={2}>Đăng nhập hệ thống</Title>
+          <Text type="secondary">Dùng tài khoản được nhà trường cấp.</Text>
         </div>
 
-        {/* Ant Design Form */}
-        <Form
-          form={form}
-          layout="vertical"
-          size="large"
-          onFinish={handleFinish}
-          initialValues={{ username: "admin@vnu.edu.vn", password: "Admin@123" }}
-        >
+        <Form layout="vertical" size="large" onFinish={handleFinish} autoComplete="on">
           <Form.Item
             name="username"
-            label="Tài khoản (Email / MSSV)"
-            rules={[{ required: true, message: "Vui lòng nhập tài khoản" }]}
+            label="Tài khoản"
+            rules={[{ required: true, message: "Vui lòng nhập tài khoản." }]}
           >
-            <Input prefix={<UserOutlined />} placeholder="VD: admin@vnu.edu.vn" />
+            <Input
+              autoComplete="username"
+              prefix={<UserOutlined />}
+              placeholder="Mã sinh viên, mã giảng viên hoặc email"
+            />
           </Form.Item>
-
           <Form.Item
             name="password"
             label="Mật khẩu"
-            rules={[{ required: true, message: "Vui lòng nhập mật khẩu" }]}
+            rules={[{ required: true, message: "Vui lòng nhập mật khẩu." }]}
           >
-            <Input.Password prefix={<LockOutlined />} />
+            <Input.Password autoComplete="current-password" prefix={<LockOutlined />} />
           </Form.Item>
-
-          <Button
-            type="primary"
-            htmlType="submit"
-            loading={busy}
-            icon={<LoginOutlined />}
-            block
-            size="large"
-          >
-            {busy ? "Đang xác thực..." : "Đăng nhập cổng học vụ"}
+          <Button type="primary" htmlType="submit" loading={busy} icon={<LoginOutlined />} block>
+            {busy ? "Đang xác thực..." : "Đăng nhập"}
           </Button>
         </Form>
 
+        {showQuickAccounts && (
+          <div className="login-quick-accounts">
+            <div className="login-quick-heading">
+              <Text strong>Đăng nhập nhanh</Text>
+              <Text type="secondary">32 tài khoản demo</Text>
+            </div>
+            <Button className="login-demo-trigger" block disabled={busy} onClick={() => setQuickAccountsOpen(true)}>
+              Chọn tài khoản demo
+            </Button>
+          </div>
+        )}
+
         {error && (
           <Alert
+            className="login-error"
             type="error"
             message={error}
             showIcon
             closable
-            style={{ marginTop: 16 }}
             onClose={() => setError("")}
           />
         )}
 
-        {/* Quick Select Demo Accounts */}
-        <div className="mt-6 pt-4" style={{ borderTop: "1px solid #e2e8f0" }}>
-          <Text type="secondary" className="block mb-3">
-            Chọn nhanh tài khoản thử nghiệm:
-          </Text>
-          <Space wrap>
-            <Button htmlType="button" size="small" onClick={() => quickSelect("admin@vnu.edu.vn", "Admin@123")}>
-              🛡️ Quản trị viên
-            </Button>
-            <Button htmlType="button" size="small" onClick={() => quickSelect("gv.nguyenvanan@vnu.edu.vn", "Teacher@123")}>
-              👨‍🏫 Giảng viên
-            </Button>
-            <Button htmlType="button" size="small" onClick={() => quickSelect("21020001@vnu.edu.vn", "Student@123")}>
-              🎓 Sinh viên
-            </Button>
-          </Space>
-        </div>
-      </div>
+        {showQuickAccounts && (
+          <Modal
+            title="Chọn tài khoản demo"
+            open={quickAccountsOpen}
+            footer={null}
+            onCancel={() => setQuickAccountsOpen(false)}
+          >
+            <Input
+              allowClear
+              autoFocus
+              prefix={<SearchOutlined />}
+              placeholder="Tìm theo mã, tên hoặc vai trò"
+              value={quickAccountSearch}
+              onChange={(event) => setQuickAccountSearch(event.target.value)}
+            />
+            <div className="login-demo-account-list">
+              {visibleQuickAccounts.map((account) => (
+                <Button
+                  className="login-demo-account"
+                  key={account.key}
+                  disabled={busy}
+                  onClick={() => handleQuickLogin(account)}
+                >
+                  <span>
+                    <strong>{account.label}</strong>
+                    <small>{account.role} · {account.username}</small>
+                  </span>
+                </Button>
+              ))}
+              {!visibleQuickAccounts.length && <Text type="secondary">Không tìm thấy tài khoản demo.</Text>}
+            </div>
+          </Modal>
+        )}
+      </section>
     </main>
   );
 }

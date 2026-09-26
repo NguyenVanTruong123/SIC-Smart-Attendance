@@ -4,6 +4,13 @@ import prisma from '../config/prisma';
 import { generateTokens, verifyRefreshToken } from '../utils/jwt';
 
 export class AuthService {
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    if (!currentPassword || newPassword.length < 8) throw Object.assign(new Error('Mật khẩu hiện tại và mật khẩu mới tối thiểu 8 ký tự là bắt buộc.'), { statusCode: 422 });
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) throw Object.assign(new Error('Mật khẩu hiện tại không chính xác.'), { statusCode: 401 });
+    await prisma.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(newPassword, 12) } });
+    return { changed: true };
+  }
   /**
    * Xử lý nghiệp vụ Đăng nhập hệ thống SPAS
    */

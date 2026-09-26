@@ -101,6 +101,10 @@ api.interceptors.response.use(
 
 export default api;
 
+export function postMultipart<T>(path: string, formData: FormData) {
+  return api.post(path, formData, { headers: { "Content-Type": undefined } }) as Promise<T>;
+}
+
 // --- Search utility ---
 export function matchesSearch(query: string, ...values: Array<string | number | undefined | null>) {
   const keyword = query.trim().toLocaleLowerCase("vi-VN");

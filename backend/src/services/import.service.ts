@@ -2,10 +2,16 @@ import * as xlsx from 'xlsx';
 import bcrypt from 'bcrypt';
 import prisma from '../config/prisma';
 import { UserRole, UserStatus, SessionStatus } from '@prisma/client';
+import { resolvePeriodRange } from '../utils/study-periods';
 
 export interface ImportWarning {
   row: number;
   message: string;
+}
+
+function isDatabaseOverlapError(value: unknown) {
+  const candidate = value as { code?: string; meta?: { code?: string } };
+  return candidate?.code === 'P2010' && candidate.meta?.code === '23P01';
 }
 
 /**
@@ -222,6 +228,9 @@ export class ImportService {
         roomCode,
         startTimeStr,
         endTimeStr,
+        periodValue: getRowValue(row, 'Ca học', 'caHoc', 'period', 'Period', 'Tiết học'),
+        periodStartValue: getRowValue(row, 'Ca bắt đầu', 'periodStart', 'Từ tiết', 'startPeriod'),
+        periodEndValue: getRowValue(row, 'Ca kết thúc', 'periodEnd', 'Đến tiết', 'endPeriod'),
         startDate,
         totalSessions,
         studentCodes,
@@ -229,7 +238,36 @@ export class ImportService {
       });
     });
 
-    return { courses: Array.from(courses.values()), courseClasses, warnings };
+    const groupedCourseClasses = new Map<string, any>();
+    for (const courseClass of courseClasses) {
+      const schedule = {
+        roomCode: courseClass.roomCode,
+        startTimeStr: courseClass.startTimeStr,
+        endTimeStr: courseClass.endTimeStr,
+        periodValue: courseClass.periodValue,
+        periodStartValue: courseClass.periodStartValue,
+        periodEndValue: courseClass.periodEndValue,
+        startDate: courseClass.startDate,
+        totalSessions: courseClass.totalSessions,
+        rowNum: courseClass.rowNum,
+      };
+      const existing = groupedCourseClasses.get(courseClass.classCode);
+      if (!existing) {
+        groupedCourseClasses.set(courseClass.classCode, { ...courseClass, schedules: [schedule] });
+        continue;
+      }
+
+      if (existing.courseCode !== courseClass.courseCode || existing.teacherCode !== courseClass.teacherCode || existing.semester !== courseClass.semester || existing.academicYear !== courseClass.academicYear) {
+        warnings.push({ row: courseClass.rowNum, message: `Mã lớp học phần ${courseClass.classCode} có thông tin môn, giảng viên hoặc học kỳ không đồng nhất.` });
+        continue;
+      }
+
+      existing.schedules.push(schedule);
+      existing.studentCodes = Array.from(new Set([...existing.studentCodes, ...courseClass.studentCodes]));
+      existing.totalSessions = Math.max(existing.totalSessions, courseClass.totalSessions);
+    }
+
+    return { courses: Array.from(courses.values()), courseClasses: Array.from(groupedCourseClasses.values()), warnings };
   }
 
   /**
@@ -258,7 +296,8 @@ export class ImportService {
       sessionsCreated: 0,
     };
 
-    return await prisma.$transaction(
+    try {
+      return await prisma.$transaction(
       async (tx) => {
         // 1. NẠP SINH VIÊN (Batch Check CSDL để phân loại Thêm mới / Cập nhật)
         if (files.studentFile) {
@@ -373,7 +412,7 @@ export class ImportService {
           existingUsers.forEach((u) => userMap.set(u.userCode, { id: u.id, role: u.role }));
 
           // Gom toàn bộ phòng học để xử lý
-          const allRoomCodes = Array.from(new Set(courseClasses.map((c) => c.roomCode)));
+          const allRoomCodes = Array.from(new Set(courseClasses.flatMap((c) => c.schedules.map((schedule: any) => schedule.roomCode))));
           const roomMap = new Map<string, string>();
 
           for (const roomCode of allRoomCodes) {
@@ -469,10 +508,6 @@ export class ImportService {
             }
 
             // 3.5 Tự động sinh 15 buổi học (15 tuần) - Dọn sạch an toàn không lỗi khóa ngoại
-            const [startH, startM] = cClass.startTimeStr.split(':').map(Number);
-            const [endH, endM] = cClass.endTimeStr.split(':').map(Number);
-
-            // Tìm các ca học cũ của lớp này
             const oldSessions = await tx.classSession.findMany({
               where: { courseClassId: createdClass.id },
               select: { id: true },
@@ -480,7 +515,6 @@ export class ImportService {
             const oldSessionIds = oldSessions.map((s) => s.id);
 
             if (oldSessionIds.length > 0) {
-              // Dọn sạch các bảng con trước để tránh Foreign Key Constraint Violation
               await tx.attendanceLog.deleteMany({
                 where: { sessionId: { in: oldSessionIds } },
               });
@@ -490,12 +524,59 @@ export class ImportService {
               await tx.leaveRequest.deleteMany({
                 where: { sessionId: { in: oldSessionIds } },
               });
-              // Xóa ca học cũ
               await tx.classSession.deleteMany({
                 where: { id: { in: oldSessionIds } },
               });
             }
 
+            if (cClass.schedules) {
+              const sessionsData: any[] = [];
+              let nextSessionNumber = 1;
+
+              for (const schedule of cClass.schedules) {
+                const period = schedule.periodValue || schedule.periodStartValue || schedule.periodEndValue
+                  ? resolvePeriodRange(schedule.periodStartValue, schedule.periodEndValue, schedule.periodValue)
+                  : null;
+                const startTimeParts = (period?.startTime || schedule.startTimeStr).split(':').map(Number);
+                const endTimeParts = (period?.endTime || schedule.endTimeStr).split(':').map(Number);
+                const roomIdForSchedule = roomMap.get(schedule.roomCode);
+                if (!roomIdForSchedule) throw new Error(`Không tìm thấy phòng học ${schedule.roomCode}.`);
+
+                for (let sessionOffset = 0; sessionOffset < schedule.totalSessions; sessionOffset++) {
+                  const sessionDate = new Date(schedule.startDate);
+                  sessionDate.setDate(sessionDate.getDate() + sessionOffset * 7);
+                  const startTime = new Date(sessionDate);
+                  startTime.setHours(startTimeParts[0] || 7, startTimeParts[1] || 0, 0, 0);
+                  const endTime = new Date(sessionDate);
+                  endTime.setHours(endTimeParts[0] || 9, endTimeParts[1] || 30, 0, 0);
+                  sessionsData.push({
+                    courseClassId: createdClass.id,
+                    classroomId: roomIdForSchedule,
+                    sessionNumber: nextSessionNumber++,
+                    sessionDate,
+                    startTime,
+                    endTime,
+                    periodStart: period?.periodStart || null,
+                    periodEnd: period?.periodEnd || null,
+                    topic: `Buổi ${nextSessionNumber - 1}: Giảng dạy theo đề cương môn học`,
+                    status: SessionStatus.SCHEDULED,
+                  });
+                }
+              }
+
+              if (sessionsData.length > 0) {
+                await tx.classSession.createMany({ data: sessionsData });
+                summary.sessionsCreated += sessionsData.length;
+              }
+
+              summary.classesImported++;
+              continue;
+            }
+
+            const [startH, startM] = cClass.startTimeStr.split(':').map(Number);
+            const [endH, endM] = cClass.endTimeStr.split(':').map(Number);
+
+            // Tìm các ca học cũ của lớp này
             // Sinh dữ liệu các buổi học
             const sessionsData: any[] = [];
             for (let sessionNum = 1; sessionNum <= cClass.totalSessions; sessionNum++) {
@@ -537,7 +618,13 @@ export class ImportService {
         maxWait: 15000,
         timeout: 60000,
       }
-    );
+      );
+    } catch (caught) {
+      if (isDatabaseOverlapError(caught)) {
+        throw Object.assign(new Error('File lịch có phòng học hoặc lớp học phần bị trùng thời gian.'), { statusCode: 409 });
+      }
+      throw caught;
+    }
   }
 }
 

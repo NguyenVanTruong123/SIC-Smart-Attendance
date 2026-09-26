@@ -1,126 +1,71 @@
-import { Card, Descriptions, Tag, Image, Typography, Button, Form, Input, Upload, Modal, message, Steps } from "antd";
-import { CameraOutlined, UploadOutlined, SafetyOutlined } from "@ant-design/icons";
+import { Alert, Card, Descriptions, Image, Result, Spin, Tag, Typography } from "antd";
+import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/authStore";
-import { useState } from "react";
 import api from "@/utils/api";
+import type { StudentBiometricProfileData } from "@/types";
 
-const { Text, Title } = Typography;
-const { TextArea } = Input;
-
-// =============================================================================
-// Student: Biometric Profile + Re-eKYC (§5.2.2)
-// =============================================================================
+function formatDate(value: string | null | undefined) {
+  return value ? new Date(value).toLocaleString("vi-VN") : "Chưa có dữ liệu";
+}
 
 export function StudentBiometricProfile() {
-  const user = useAuthStore((s) => s.user)!;
-  const [reEkycOpen, setReEkycOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [form] = Form.useForm();
+  const user = useAuthStore((state) => state.user)!;
+  const { data, isLoading, isError } = useQuery<StudentBiometricProfileData>({
+    queryKey: ["student-biometric-profile"],
+    queryFn: () => api.get("/student/biometric-profile") as Promise<StudentBiometricProfileData>,
+  });
 
-  const handleReEkyc = async (values: Record<string, unknown>) => {
-    setSubmitting(true);
-    try {
-      const formData = new FormData();
-      formData.append("reason", values.reason as string);
-      if (values.student_card_image) {
-        formData.append("student_card_image", (values.student_card_image as { file: File }).file);
-      }
-      if (values.new_video_file) {
-        formData.append("new_video_file", (values.new_video_file as { file: File }).file);
-      }
-      await api.post("/student/re-ekyc/submit", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      message.success("Đã gửi yêu cầu cập nhật diện mạo mới. Vui lòng chờ Admin phê duyệt.");
-      setReEkycOpen(false);
-      form.resetFields();
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : "Gửi yêu cầu thất bại.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  if (isLoading) return <div className="portal-loading"><Spin /></div>;
+  if (isError || !data) {
+    return <Alert className="portal-alert" type="warning" showIcon message="Chưa tải được hồ sơ định danh" description="Hãy thử tải lại trang hoặc đăng nhập lại." />;
+  }
+
+  const biometric = data.biometric;
+  const enrolled = data.status === "ENROLLED";
+  const enrollmentImages = data.enrollmentImages ?? [];
 
   return (
-    <div className="space-y-6">
-      <Card
-        title="Hồ sơ sinh trắc học"
-        extra={
-          <Tag color={user.isFaceEnrolled ? "success" : "error"}>
-            {user.isFaceEnrolled ? "✅ Đã xác thực" : "❌ Chưa xác thực"}
-          </Tag>
-        }
-      >
+    <section aria-labelledby="biometric-profile-title">
+      <div className="page-heading">
+        <div>
+          <h1 id="biometric-profile-title">Hồ sơ tài khoản</h1>
+          <p>Thông tin tài khoản và dữ liệu khuôn mặt dùng để đối chiếu điểm danh.</p>
+        </div>
+        <Tag color={enrolled ? "success" : "warning"}>{enrolled ? "Đã đăng ký" : "Chưa đăng ký"}</Tag>
+      </div>
+      <Card className="portal-card" title="Thông tin tài khoản & khuôn mặt">
         <Descriptions bordered column={{ xs: 1, sm: 2 }}>
-          <Descriptions.Item label="MSSV">{user.userCode}</Descriptions.Item>
-          <Descriptions.Item label="Họ và tên">{user.fullName}</Descriptions.Item>
-          <Descriptions.Item label="Email">{user.email}</Descriptions.Item>
-          <Descriptions.Item label="Khoa">{user.department ?? "—"}</Descriptions.Item>
-          <Descriptions.Item label="Lớp">{user.className ?? "—"}</Descriptions.Item>
-          <Descriptions.Item label="Trạng thái eKYC">
-            {user.isFaceEnrolled ? "Đã nạp Vector khuôn mặt" : "Chưa đăng ký"}
-          </Descriptions.Item>
-          <Descriptions.Item label="Ảnh đại diện" span={2}>
-            {user.avatarUrl ? (
-              <Image src={user.avatarUrl} width={80} style={{ borderRadius: 8 }} alt="Avatar" />
+          <Descriptions.Item label="MSSV">{data.student.userCode || user.userCode}</Descriptions.Item>
+          <Descriptions.Item label="Họ và tên">{data.student.fullName || user.fullName}</Descriptions.Item>
+          <Descriptions.Item label="Email">{data.student.email}</Descriptions.Item>
+          <Descriptions.Item label="Khoa">{data.student.department ?? "—"}</Descriptions.Item>
+          <Descriptions.Item label="Lớp">{data.student.className ?? "—"}</Descriptions.Item>
+          <Descriptions.Item label="Trạng thái">{enrolled ? "Đã nạp vector khuôn mặt" : "Chưa đăng ký"}</Descriptions.Item>
+          <Descriptions.Item label="Mã vector">{biometric?.vectorId ?? "—"}</Descriptions.Item>
+          <Descriptions.Item label="Mô hình">{biometric?.modelVersion ?? "—"}</Descriptions.Item>
+          <Descriptions.Item label="Kích thước vector">{biometric?.embeddingDimension ? `${biometric.embeddingDimension}D` : "—"}</Descriptions.Item>
+          <Descriptions.Item label="Ngày đăng ký">{formatDate(biometric?.enrolledAt)}</Descriptions.Item>
+          <Descriptions.Item label="Ảnh enrollment" span={2}>
+            {enrollmentImages.length ? (
+              <Image.PreviewGroup>
+                <div className="flex flex-wrap gap-3">
+                  {enrollmentImages.map((image) => (
+                    <div key={image.id} className="flex flex-col gap-1">
+                      <Image src={image.previewBase64} width={140} style={{ borderRadius: 8 }} alt={`Ảnh enrollment ${image.imageIndex}`} />
+                      <small>{image.pose === "left" ? "Quay trái" : image.pose === "right" ? "Quay phải" : "Nhìn thẳng"} · Ảnh {image.imageIndex}</small>
+                    </div>
+                  ))}
+                </div>
+              </Image.PreviewGroup>
             ) : (
-              <Text type="secondary">Chưa có ảnh</Text>
+              <Result status="info" title="Chưa có ảnh enrollment" subTitle="Hoàn tất đăng ký khuôn mặt để hiển thị ảnh định danh." />
             )}
           </Descriptions.Item>
         </Descriptions>
-
-        {user.isFaceEnrolled && (
-          <Button
-            type="default"
-            icon={<SafetyOutlined />}
-            className="mt-4"
-            onClick={() => setReEkycOpen(true)}
-          >
-            Yêu cầu cập nhật diện mạo (Re-eKYC)
-          </Button>
-        )}
+        <Typography.Paragraph type="secondary" className="mt-4">
+          Chỉ tài khoản sinh viên hiện tại mới đọc được hồ sơ và ảnh này. Hệ thống không trả embedding thô hoặc đường dẫn lưu trữ nội bộ.
+        </Typography.Paragraph>
       </Card>
-
-      {/* Re-eKYC Modal */}
-      <Modal
-        title="Yêu cầu cấp lại khuôn mặt (Re-eKYC)"
-        open={reEkycOpen}
-        onCancel={() => setReEkycOpen(false)}
-        footer={null}
-        width={520}
-      >
-        <Steps
-          size="small"
-          current={0}
-          className="mb-4"
-          items={[
-            { title: "Tải ảnh thẻ SV/CCCD" },
-            { title: "Quay video mới" },
-            { title: "Chờ Admin duyệt" },
-          ]}
-        />
-        <Form form={form} layout="vertical" onFinish={handleReEkyc}>
-          <Form.Item name="reason" label="Lý do thay đổi diện mạo" rules={[{ required: true, min: 10 }]}>
-            <TextArea rows={2} placeholder="VD: Phẫu thuật nâng mũi và cắt mí tháng trước." />
-          </Form.Item>
-
-          <Form.Item name="student_card_image" label="Ảnh thẻ Sinh viên / CCCD" rules={[{ required: true }]}>
-            <Upload maxCount={1} beforeUpload={() => false} accept="image/*">
-              <Button icon={<UploadOutlined />}>Chọn ảnh</Button>
-            </Upload>
-          </Form.Item>
-
-          <Form.Item name="new_video_file" label="Video 3s diện mạo mới" rules={[{ required: true }]}>
-            <Upload maxCount={1} beforeUpload={() => false} accept="video/*">
-              <Button icon={<CameraOutlined />}>Chọn video</Button>
-            </Upload>
-          </Form.Item>
-
-          <Button type="primary" htmlType="submit" loading={submitting} block>
-            Gửi yêu cầu Re-eKYC
-          </Button>
-        </Form>
-      </Modal>
-    </div>
+    </section>
   );
 }
